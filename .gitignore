@@ -1,0 +1,22 @@
+#Python
+__pycache__/
+*.log
+venv/
+*.py[cod]
+*$py.class
+
+# IDEs
+.idea/
+.vscode/
+
+#Secrets
+.auth
+.env
+
+#Save Secrets
+Saves/quotes.json
+Saves/QuoteUsers.json
+Saves/UserSaves.json
+
+# OS generated files
+.DS_Store

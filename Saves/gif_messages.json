@@ -1,0 +1,63 @@
+{
+    "punch": [
+        "{author} winds up and absolutely decks {target} with a brutal punch!",
+        "{author} throws a mean right hook straight at {target}'s face!",
+        "K.O.! {author} just punched {target} into next week!",
+        "{author} delivers a textbook anime punch, sending {target} flying!",
+        "{author} lands a clean punch on {target}. That one's gonna leave a mark."
+    ],
+    "slap": [
+        "The sound of {author}'s slap on {target} echoes through the cafe.",
+        "{author} delivers a dramatic slap to {target}! The telenovela energy is real.",
+        "{author} slaps {target} back to their senses. Probably deserved.",
+        "SMACK! {author} just gave {target} a legendary slap.",
+        "{author} lightly slaps {target} as a warning shot\u2026 behave."
+    ],
+    "cry": [
+        "{author} starts tearing up and quietly cries in the corner of the cafe.",
+        "Big emotions hit {author} all at once, and the tears start flowing.",
+        "{author} can\u2019t hold it in anymore and breaks down crying.",
+        "{author} lets out an ugly cry. Someone please give them a hug.",
+        "Tears roll down {author}'s cheeks. Today is not their day."
+    ],
+    "happy": [
+        "{author} is absolutely beaming with joy!",
+        "{author} starts doing a little happy dance right in the middle of the cafe.",
+        "Pure serotonin: {author} is radiating happiness.",
+        "{author} can\u2019t stop smiling\u2014today is a good day.",
+        "{author} is so happy they might just float away."
+    ],
+    "kill": [
+        "{author} has completely obliterated {target}. There is nothing left but pixels.",
+        "{author} executes a finishing move and sends {target} to the shadow realm.",
+        "Critical hit! {author} absolutely destroys {target}.",
+        "{author} has slain {target}. F in the chat.",
+        "R.I.P. {target}. {author} just ended your whole career."
+    ],
+    "tickle": [
+        "{author} launches a ruthless tickle attack on {target}!",
+        "{author} tickles {target} until they're gasping for air from laughing.",
+        "{author} discovered {target}'s weak spot: tickles.",
+        "{author} ambushes {target} with a surprise tickle assault.",
+        "{author} tickles {target} so much they almost fall out of their chair."
+    ],
+    "wave": [
+        "{author} gives a cheerful wave to {target} from across the cafe.",
+        "{author} waves excitedly at {target}! Hi there!",
+        "{author} gives a shy little wave in {target}'s direction.",
+        "{author} raises a hand and waves like an NPC spotting the player.",
+        "{author} waves goodbye to {target}. Come back soon!"
+    ],
+    "kiss": [
+        "{author} leans in and gives {target} a sweet kiss on the cheek.",
+        "{author} pulls {target} in for a romantic kiss. The whole cafe is swooning.",
+        "{author} blows a soft kiss toward {target}. Catch it before it floats away.",
+        "{author} gives {target} a quick, flustered little kiss and immediately looks away.",
+        "{author} and {target} share a cinematic kiss. Someone cue the background music.",
+        "{author} plants a gentle forehead kiss on {target}. Instant comfort buff applied.",
+        "{author} sneaks up and drops a surprise kiss on {target}'s cheek.",
+        "{author} gives {target} a lingering kiss that makes the whole cafe go quiet.",
+        "{author} blows an exaggerated, over-the-top kiss at {target} from across the room.",
+        "{author} steals a quick kiss from {target} and grins like they got away with something."
+    ]
+}

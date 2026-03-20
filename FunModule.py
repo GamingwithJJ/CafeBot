@@ -1,0 +1,399 @@
+
+import discord
+import random
+import DataStorage
+import asyncio
+from DataStorage import get_or_create_user
+from Classes.RequestClass import Request
+from Classes.UserSavesClass import User
+
+
+async def marry(ctx, member):
+    target_user_id = member.id
+    author = ctx.author
+    author_user_id = author.id
+
+    target_user_data = get_or_create_user(target_user_id)
+    author_user_data = get_or_create_user(author_user_id)
+
+    if author_user_id == target_user_id:
+        await ctx.send("You can't marry yourself silly!")
+        return
+
+    if member.bot:
+        await ctx.send("You can't marry a bot!")
+        return
+
+    if author_user_data.get_marriage_partner() is not None:
+        await ctx.send("You already have a partner!")
+        return
+
+    if target_user_data.get_marriage_partner() is not None:
+        await ctx.send("The user you are trying to marry already has a partner!")
+        return
+
+    if target_user_data.get_request("marriage", author_user_id) is not None:
+        await ctx.send("You have already sent a request to this user")
+        return
+
+    request_to_send = Request("marriage", author_user_id)
+    target_user_data.add_request("marriage", request_to_send)
+    await ctx.send(f"Sent request to {member}")
+
+    # Check if that user already sent the user a request, if so Marry them.
+    if author_user_data.get_request("marriage", target_user_id) is not None:
+        # Remove the requests
+        author_user_data.remove_request_by_data("marriage", target_user_id)
+        target_user_data.remove_request(request_to_send)
+        # Add the partners
+        author_user_data.set_marriage_partner(target_user_id)
+        target_user_data.set_marriage_partner(author_user_id)
+        await ctx.send("You are both now married! Congratulations!")
+
+    DataStorage.save_user_data() # Temorary. Saves the file every time.
+
+
+async def divorce(ctx):
+    author_id = ctx.author.id
+    author_data = get_or_create_user(author_id)
+
+    # Check if the user is actually married
+    partner_id = author_data.get_marriage_partner()
+
+    if partner_id is None:
+        await ctx.send("💔 You aren't currently married to anyone!")
+        return
+
+    # Get the partner's data
+    partner_data = get_or_create_user(partner_id)
+
+    # Break the bond (Set both to None)
+    author_data.set_marriage_partner(None)
+    partner_data.set_marriage_partner(None)
+
+    # Save the changes
+    DataStorage.save_user_data()
+
+    await ctx.send(f"📜 {ctx.author.mention} has divorced <@{partner_id}>. The papers have been signed.")
+
+
+async def duel(ctx, target: discord.Member):
+    author = ctx.author
+    bot_id = ctx.bot.user.id
+
+    if target.id == author.id:
+        await ctx.send("You cant duel yourself silly!")
+        return
+
+    if target.id == bot_id:
+        await ctx.send("You want to duel me? Well Alright!")
+        await ctx.send(f"{ctx.bot.user} did 999999 damage to {author}! ({999999-100}/100)")
+        await ctx.send(f"Sorry! You lost!")
+        return
+
+    author_hp = 100
+    target_hp = 100
+
+    embed = discord.Embed(
+        title="⚔️ A Duel has Begun!",
+        description=f"{author.mention} vs {target.mention}",
+        color=discord.Color.red()
+    )
+    embed.add_field(name=f"{author.display_name}'s HP", value=f"❤️ {author_hp}/100", inline=True)
+    embed.add_field(name=f"{target.display_name}'s HP", value=f"❤️ {target_hp}/100", inline=True)
+    embed.set_footer(text="Let the battle begin!")
+
+    duel_msg = await ctx.send(embed=embed)
+    while author_hp > 0 and target_hp > 0:
+        author_roll = random.randint(1, 20)
+        target_roll = random.randint(1, 20)
+
+        # Author Turn
+        target_hp -= author_roll
+        embed.description = f"💥 **{author.display_name}** deals **{author_roll}** damage!"
+        embed.set_field_at(0, name=f"{author.display_name}'s HP", value=f"❤️ {author_hp}/100", inline=True)
+        embed.set_field_at(1, name=f"{target.display_name}'s HP", value=f"❤️ {target_hp}/100", inline=True)
+        await duel_msg.edit(embed=embed)
+
+        # Target Turn
+        author_hp -= target_roll
+        embed.description = f"💥 **{target.display_name}** deals **{target_roll}** damage!"
+        embed.set_field_at(0, name=f"{author.display_name}'s HP", value=f"❤️ {author_hp}/100", inline=True)
+        embed.set_field_at(1, name=f"{target.display_name}'s HP", value=f"❤️ {target_hp}/100", inline=True)
+        await duel_msg.edit(embed=embed)
+
+
+    embed.title = "🏆 Duel Finished!"
+    # If author is alive and target is dead
+    if author_hp > 0 and target_hp <= 0:
+        embed.description = f"Congratulations {author.mention}, you have defeated {target.mention}!"
+        embed.color = discord.Color.gold()
+
+    # If target is alive and author is dead
+    elif target_hp > 0 and author_hp <= 0:
+        embed.description = f"Congratulations {target.mention}, you have defeated {author.mention}!"
+        embed.color = discord.Color.gold()
+
+    # Both died at the same time
+    else:
+        embed.title = "🤝 It's a Tie!"
+        embed.description = f"Both {author.mention} and {target.mention} have fallen at the same time!"
+        embed.color = discord.Color.light_grey()
+    embed.set_footer(text="Good Fight!")
+    await duel_msg.edit(embed=embed)
+
+
+async def quote(ctx):
+
+    quotes_dictionary = DataStorage.quotes
+    random_user_number = random.randint(0, len(DataStorage.quote_users) - 1)
+    random_user = DataStorage.quote_users[random_user_number]
+
+    random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
+    random_quote = quotes_dictionary[random_user][random_quote_number]
+
+    await ctx.send(f"{str(random_quote)}")
+
+
+async def quotes(ctx, amount: int):
+    if amount > 5:
+        await ctx.send("You can only list 5 quotes at a time.")
+        return
+
+    quotes_display = ""
+    for number in range(0, amount):
+        quotes_dictionary = DataStorage.quotes
+        random_user_number = random.randint(0, len(DataStorage.quote_users) - 1)
+        random_user = DataStorage.quote_users[random_user_number]
+
+        random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
+        random_quote = quotes_dictionary[random_user][random_quote_number]
+        quotes_display += f"{str(random_quote)} \n"
+    await ctx.send(quotes_display)
+
+
+async def quote_list(ctx, user: str, number):
+    """Sorts quotes by a individual and only shows quotes which are sent by a certain individual."""
+    if number > 5:
+        await ctx.send("You can only send five quotes at a time.")
+
+    user = user.lower().capitalize()
+    if user not in DataStorage.quote_users:
+        await ctx.send(f"{user} user is not a recognized quote user")
+
+    quotes_display = ""
+    for number in range(0, number):
+        random_quote_number = random.randint(0, len(DataStorage.quotes[user]) - 1)
+        random_quote = DataStorage.quotes[user][random_quote_number]
+        quotes_display += f"{str(random_quote)} \n"
+
+    await ctx.send(quotes_display)
+
+
+async def quote_count(ctx, user: str):
+    """Displays the quotes count of a certain user"""
+    user = user.lower().capitalize()
+    if user not in DataStorage.quote_users:
+        await ctx.send(f"{user} is not a valid quoter")
+        return
+
+    await ctx.send(f"{user} has made {len(DataStorage.quotes[user])} quotes!")
+
+
+async def quote_top(ctx):
+    """Displays the top ten quoters"""
+    quoters = DataStorage.quote_users
+    quotes = DataStorage.quotes
+
+    quote_amounts = [] # List which stores the amount of quotes for each quoter and the name of the quoter in a tuple
+    for quoter_temp in quoters:
+        amount_of_quotes = len(quotes[quoter_temp])
+        quote_amounts.append((quoter_temp, amount_of_quotes))
+
+    top_users = sorted(
+        quote_amounts,
+        key=lambda x: x[1], # Sort by second number
+        reverse=True  # Sort descending (biggest numbers first)
+    )[:10]
+
+    if not top_users:
+        await ctx.send("There were no users who qualify")
+        return
+
+    description = ""
+    for i, quoter in enumerate(top_users):
+        quote_amount = quoter[1]
+        description += f"{i + 1}. `{quoter[0]}`: {quote_amount}\n"
+
+    embed = discord.Embed(
+        title="🏆 Top 10 users with the most quotes!",
+        description=description,
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text="Top Quoters List!")
+
+    await ctx.send(embed=embed)
+
+
+
+async def gif(ctx, type: str, target: discord.Member = None):
+    gifs = DataStorage.gifs[type]
+    random_number = random.randint(0, len(gifs) - 1)
+    gif = gifs[random_number]
+
+    embed = discord.Embed(color=discord.Color.random())
+
+    template = random.choice(DataStorage.gif_messages[type])
+    target_name = target.mention if target else "the void"
+    embed.description = template.format(
+        author = ctx.author.mention,
+        target = target_name
+    )
+
+    embed.set_image(url=gif)
+    await ctx.send(embed=embed)
+
+
+async def magic_eight_ball(ctx, question: str):
+    response = random.choice(DataStorage.magic_eight_ball)
+
+    embed = discord.Embed(
+        title="🔮 Magic 8-Ball",
+        description=f"{ctx.author.mention} consults the oracle...",
+        color=discord.Color.blurple()
+    )
+
+    embed.add_field(
+        name="❓ Question",
+        value=question,
+        inline=False
+    )
+
+    embed.add_field(
+        name="☕ Answer",
+        value=f"**{response}**",
+        inline=False
+    )
+
+    embed.set_footer(text="CafeBot | The coffee grounds have spoken.")
+    embed.set_thumbnail(url=ctx.bot.user.display_avatar.url)
+
+    await ctx.send(embed=embed)
+
+
+async def partner(ctx):
+    """Lists your current partner and the time you've been together."""
+    author_id = ctx.author.id
+    user_data = DataStorage.get_or_create_user(author_id)
+
+    partner_id = user_data.get_marriage_partner()
+
+    if not partner_id:
+        embed = discord.Embed(
+            title="💔 No Partner Found",
+            description="You dont have a partner yet, Use .marry to propose!",
+            color = discord.Color.light_gray()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    # Get partners discord user object.
+    partner_user = ctx.bot.get_user(partner_id) or await ctx.bot.fetch_user(partner_id)
+
+    embed = discord.Embed(
+        title="💕 Marriage Certificate",
+        description="This is a certificate of your marriage!",
+        color=discord.Color.fuchsia()
+    )
+
+    embed.add_field(name="👤 User", value=ctx.author.mention, inline=True)
+    embed.add_field(name="💍 Partner", value=f"<@{partner_id}>", inline=True)
+
+    marriage_date = user_data.get_partner_gained_date()
+
+    if marriage_date:
+        timestamp = int(marriage_date.timestamp())
+        time_str = f"<t:{timestamp}:D> (<t:{timestamp}:R>)"
+    else:
+        time_str = "A long, long time ago..."
+
+    embed.add_field(name="📅 Married Since", value=time_str, inline=False)
+
+    if partner_user:
+        embed.set_thumbnail(url=partner_user.display_avatar.url)
+
+    embed.set_footer(
+        text="CafeBot Love Registry | ☕💕",
+        icon_url=ctx.bot.user.display_avatar.url
+    )
+
+    await ctx.send(embed=embed)
+
+
+async def marriage_top(ctx):
+    """Lists the top 10 marriages ordered by length married"""
+    user_saves = DataStorage.user_data
+
+    marriages = []
+    seen_users = set() #Store seen users, since we only need to store one user per marriage.
+
+    # Use a set to order the users, sorting by marriage length.
+    for user_id, user in user_saves.items():
+        # Filter users who arent married, or have already been seen.
+        if not user.marriage_partner or user_id in seen_users:
+            continue
+
+        # Add both partners to seen, and add the marriage to the list.
+        marriages.append(user)
+        seen_users.add(user_id)
+        seen_users.add(str(user.marriage_partner))
+
+        # Sort by marriage date
+    top_marriages = sorted(
+        [m for m in marriages if m.partner_gained_date],
+        key=lambda x: x.partner_gained_date
+    )[:10]
+
+    if not top_marriages:
+        await ctx.send("No marriages found in the registry! 💔")
+        return
+
+    description = ""
+    for i, user in enumerate(top_marriages):
+        timestamp = int(user.partner_gained_date.timestamp())
+        description += f"{i + 1}. <@{user.discord_id}> & <@{user.marriage_partner}> — <t:{timestamp}:R>\n"
+
+    embed = discord.Embed(
+        title="🏆 Top 10 Longest Marriages",
+        description=description,
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text="CafeBot Love Registry | ☕💕")
+
+    await ctx.send(embed=embed)
+
+
+async def coinflip(ctx):
+    random_number = random.randint(0, 1)
+    outcome = None
+
+    if random_number == 0:
+        outcome = "Heads"
+    else:
+        outcome = "Tails"
+
+    embed = discord.Embed(
+        title="🪙 Coin Flip",
+        description=f"{ctx.author.mention} tossed a coin into the air...",
+        color=discord.Color.gold()
+    )
+
+    await asyncio.sleep(1)
+
+    embed.add_field(
+        name="The result is...",
+        value=f"✨ **{outcome}** ✨",
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
