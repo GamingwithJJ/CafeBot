@@ -1,5 +1,6 @@
 import DataStorage
 from Classes.QuoteClass import Quote
+from Classes.Verse import Verse
 
 
 async def add_gif(ctx, type: str, link: str):
@@ -30,6 +31,7 @@ async def remove_gif(ctx, type: str, link: str):
             DataStorage.gifs[type].pop(index)
             DataStorage.save_gifs()
             await ctx.send("Removed gif from the list.")
+            return
 
     await ctx.send("Gif with the specified link was not found.")
 
@@ -66,7 +68,7 @@ async def add_quote(ctx, authors, quote):
     await ctx.send(f"✅ Added quote")
 
 
-async def remove_quote(ctx, *, quote_to_remove: str):
+async def remove_quote(ctx, quote_to_remove: str):
     """Removes a quote by its text content."""
     for author, quote_list in DataStorage.quotes.items():
         for index, quote_obj in enumerate(quote_list):
@@ -95,4 +97,31 @@ async def remove_eight_ball(ctx, response_to_remove: str):
             DataStorage.save_eight_ball()
             await ctx.send(f"✅Removed Response!")
     await ctx.send("Could not find specified response")
+
+
+async def add_verse(ctx, reference: str, verse_text: str):
+    """Adds a new Bible verse to the database"""
+    # Check if we already have it
+    for v in DataStorage.verses:
+        if v.get_reference().lower() == reference.lower():
+            await ctx.send(f"❌ You already have {reference} saved!")
+            return
+
+    new_verse = Verse(verse_text, reference)
+    DataStorage.verses.append(new_verse)
+    DataStorage.save_verses()
+
+    await ctx.send(f"✅ Successfully added **{reference}**!")
+
+
+async def remove_verse(ctx, reference: str):
+    """Removes a verse by its reference"""
+    for index, v in enumerate(DataStorage.verses):
+        if v.get_reference().lower() == reference.lower():
+            DataStorage.verses.pop(index)
+            DataStorage.save_verses()
+            await ctx.send(f"✅ Removed **{reference}**!")
+            return
+
+    await ctx.send("❌ Could not find a verse with that reference.")
 

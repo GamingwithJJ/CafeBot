@@ -4,6 +4,7 @@ from Classes.UserSavesClass import User
 from Classes.RequestClass import Request
 from Classes.DndCharacter import DndCharacter
 from Classes.QuoteClass import Quote
+from Classes.Verse import Verse
 import datetime
 from dotenv import dotenv_values
 
@@ -16,11 +17,11 @@ GIFS_FILE = "Saves/gifs.json"
 MESSAGES_FILE = "Saves/gif_messages.json"
 MAGIC_EIGHT_BALL_FILE = "Saves/MagicEightBall.json"
 QUOTE_USERS_FILE = "Saves/QuoteUsers.json"
+VERSES_FILE = "Saves/verses.json"
 
-config = dotenv_values(".env")
-administrator_list = config.get("administrators").split(",")
+verses = []
 
-administrators = administrator_list
+administrators = []
 
 
 magic_eight_ball = []
@@ -102,6 +103,17 @@ def save_gif_messages():
         print(f"❌ Error saving gif messages: {e}")
 
 
+def save_verses():
+    """Saves verses to JSON file."""
+    try:
+        with open(VERSES_FILE, "w", encoding="utf-8") as f:
+            # Convert all Verse objects to dictionaries
+            json.dump([v.to_dict() for v in verses], f, indent=4, ensure_ascii=False)
+        print("✅ Verses saved!")
+    except Exception as e:
+        print(f"❌ Error saving verses: {e}")
+
+
 def save_all():
     """Saves all bot configuration data."""
     save_quotes()
@@ -109,11 +121,12 @@ def save_all():
     save_gif_messages()
     save_eight_ball()
     save_quote_users()
+    save_verses()
 
 
 def load_all():
     """Loads all data from files. Returns defaults if files don't exist."""
-    global quotes, gifs, gif_messages, magic_eight_ball, quote_users
+    global quotes, gifs, gif_messages, magic_eight_ball, quote_users, verses
 
     # Load quotes
     quotes_data = {}
@@ -157,6 +170,15 @@ def load_all():
             magic_eight_ball = json.load(f)
     else:
         magic_eight_ball = []
+
+    # Load verses
+    if os.path.exists(VERSES_FILE):
+        with open(VERSES_FILE, "r", encoding="utf-8") as f:
+            verses_data = json.load(f)
+            for verse_dict in verses_data:
+                verses.append(Verse(verse_dict["text"], verse_dict["reference"]))
+    else:
+        verses = []
 
     print(f"✅ Loaded {len(quotes)} quotes, {len(gifs)} gif categories, {len(gif_messages)} message categories, and {len(magic_eight_ball)} eight ball responses.")
 

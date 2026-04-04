@@ -59,5 +59,84 @@
         "{author} gives {target} a lingering kiss that makes the whole cafe go quiet.",
         "{author} blows an exaggerated, over-the-top kiss at {target} from across the room.",
         "{author} steals a quick kiss from {target} and grins like they got away with something."
+    ],
+    "hug": [
+        "{author} wraps {target} in a warm, cozy hug!",
+        "{author} tackle-hugs {target} to the ground!",
+        "{author} gives {target} a gentle hug. Everything will be okay.",
+        "{author} squeezes {target} tight in a bear hug!"
+    ],
+    "sip": [
+        "{author} takes a slow, dramatic sip of their coffee.",
+        "{author} aggressively sips their drink.",
+        "{author} takes a sip and minds their own business.",
+        "{author} loudly slurps their drink."
+    ],
+    "spill": [
+        "{author} accidentally knocks over their mug, spilling coffee everywhere!",
+        "{author} intentionally spills their drink all over {target}. Chaos!",
+        "Oops! {author} just spilled a freshly brewed latte on {target}.",
+        "{author} trips and spills their drink across the floor."
+    ],
+    "shocked": [
+        "{author} gasps in absolute shock!",
+        "{author}'s jaw drops to the floor.",
+        "{author} is too stunned to speak.",
+        "{author} drops their coffee mug in complete disbelief."
+    ],
+    "pat": [
+        "{author} gives {target} a gentle head pat.",
+        "{author} awkwardly pats {target} on the back. 'There, there.'",
+        "{author} vigorously pats {target}'s head!",
+        "{author} gives {target} a pat of approval."
+    ],
+    "cuddle": [
+        "{author} snuggles up and cuddles with {target} on the cafe sofa.",
+        "{author} demands cuddles from {target}!",
+        "{author} pulls {target} close for some warm cuddles.",
+        "{author} wraps a blanket around {target} and cuddles them."
+    ],
+    "cheer": [
+        "{author} cheers loudly for {target}!",
+        "{author} waves pom-poms and cheers {target} on!",
+        "{author} raises their coffee mug in a toast to {target}!",
+        "{author} hypes up {target} like there's no tomorrow."
+    ],
+    "bonk": [
+        "{author} BONKS {target} right on the head! Go to jail.",
+        "{author} delivers a swift, disciplinary bonk to {target}.",
+        "BONK! {author} hits {target} with a squeaky hammer.",
+        "{author} gives {target} a warning bonk."
+    ],
+    "bite": [
+        "{author} casually walks up and CHOMPS down on {target}!",
+        "{author} gives {target} a playful little bite.",
+        "{author} goes feral and bites {target}. Call a doctor.",
+        "{author} nibbles on {target}'s arm."
+    ],
+    "stare": [
+        "{author} stares intensely into {target}'s soul.",
+        "{author} locks eyes with {target} from across the cafe.",
+        "{author} unblinkingly stares at {target}...",
+        "{author} gives {target} the ultimate death glare."
+    ],
+    "explode": [
+        "{author} literally spontaneously combusts.",
+        "BOOM! {author} just exploded!",
+        "{author}'s brain overheated and exploded.",
+        "{author} activates their self-destruct sequence."
+    ],
+    "sleep": [
+        "{author} faceplants onto the table and falls fast asleep.",
+        "{author} curls up into a ball and goes to sleep.",
+        "{author} is too tired to function and starts snoring.",
+        "{author} puts on a sleep mask and checks out for the day."
+    ],
+    "purge": [
+        "{author} banishes {target} to the shadow realm!",
+        "{author} presses the big red button, obliterating {target}!",
+        "{author} absolutely deletes {target} from existence.",
+        "{author} casually wipes {target} off the face of the earth."
     ]
+
 }

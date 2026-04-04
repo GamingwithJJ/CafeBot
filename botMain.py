@@ -7,6 +7,7 @@ import EconomyModule
 import FunModule
 import ModerationModule
 import BotAdminModule
+import FaithModule
 
 from dotenv import dotenv_values
 
@@ -17,12 +18,14 @@ bot = commands.Bot(command_prefix='.', intents=intents)
 
 bot.remove_command('help')
 
+config = dotenv_values(".env")
+DataStorage.administrators = config.get("administrators").split(",")
+
 
 def is_authorized(required_type: str = "any"):
     async def predicate(ctx):
-        user_id = ctx.author.id
 
-        if user_id in DataStorage.administrators:
+        if str(ctx.author.id) in DataStorage.administrators:
             return True
 
         if required_type == "server_admin":
@@ -66,128 +69,180 @@ async def on_ready():
 # Commands:
 
 
+# --- HELP MENU CONFIGURATION ---
+
+# 1. Helper function to check if a user can see a command
+def check_cmd_permission(ctx, required_type):
+    # Bot admins can see everything
+    if str(ctx.author.id) in DataStorage.administrators:
+        return True
+
+    if required_type == "any":
+        return True
+    elif required_type == "server_admin":
+        return ctx.author.guild_permissions.administrator
+    elif required_type == "moderator":
+        return ctx.author.guild_permissions.manage_messages
+    elif required_type == "kick":
+        return ctx.author.guild_permissions.kick_members
+    elif required_type == "ban":
+        return ctx.author.guild_permissions.ban_members
+    elif required_type == "mute":
+        return ctx.author.guild_permissions.moderate_members
+    elif required_type == "bot_admin":
+        return False
+
+    return False
+
+
+# 2. Format: ("Command Usage", "Description", "Required Permission")
+COMMAND_MODULES = {
+    "Misc": {
+        "description": "General bot utilities.",
+        "emoji": "🔧",
+        "commands": [
+            ("`.ping`", "Check if the bot is awake", "any"),
+            ("`.help [module]`", "Display this menu", "any")
+        ]
+    },
+    "Moderation": {
+        "description": "Server management and moderation tools.",
+        "emoji": "🛡️",
+        "commands": [
+            ("`.purge <amount>`", "Delete messages", "server_admin"),
+            ("`.lockdown [state] [all]`", "Lock channels", "server_admin"),
+            ("`.slowmode <on/off> [seconds]`", "Set chat delay", "server_admin"),
+            ("`.kick <user> [reason]`", "Kick a member", "kick"),
+            ("`.ban <user> [reason]`", "Ban a member", "ban"),
+            ("`.softban <user> [days] [reason]`", "Ban & delete msgs, then unban", "server_admin"),
+            ("`.unban <id>`", "Unban a user by ID", "ban"),
+            ("`.mute <user> [mins] [reason]`", "Timeout a user", "server_admin"),
+            ("`.unmute <user>`", "Remove timeout", "server_admin"),
+            ("`.whois <user>`", "View user account info", "server_admin")
+        ]
+    },
+    "DnD": {
+        "description": "Tabletop RPG dice and character management.",
+        "emoji": "🎲",
+        "commands": [
+            ("`.roll <dice> [modifier]`", "Roll dice (e.g. .roll d20)", "any"),
+            ("`.roll_multiple <input>`", "Roll multiple sets of dice", "any"),
+            ("`.create_character <name> <class>`", "Create and save a character", "any"),
+            ("`.view_characters`", "Lists all your currently saved characters", "any")
+        ]
+    },
+    "Fun": {
+        "description": "Social commands, marriage, quotes, and games.",
+        "emoji": "💕",
+        "commands": [
+            ("`.marry <user>`", "Propose to another user", "any"),
+            ("`.divorce`", "End your current marriage", "any"),
+            ("`.partner`", "View your marriage certificate", "any"),
+            ("`.marriage_top`", "Top ten marriages in the server", "any"),
+            ("`.duel <user>`", "Have a duel with the specified user!", "any"),
+            ("`.quote`", "Generate a random quote!", "any"),
+            ("`.quote_list <user> <amount>`", "Quotes from a specific user", "any"),
+            ("`.quote_count <user>`", "Check how many quotes someone has", "any"),
+            ("`.quote_top`", "Top quoters leaderboard", "any"),
+            ("`.eight_ball <question>`", "Ask the eight ball a question", "any"),
+            ("`.coinflip`", "Flip a coin!", "any"),
+            ("`Emotes:`", "`.punch`, `.kill`, `.kiss`, etc.", "any")
+        ]
+    },
+    "Economy": {
+        "description": "Work shifts, earn beans, and tip friends.",
+        "emoji": "☕",
+        "commands": [
+            ("`.shift`", "Work a shift to earn Coffee Beans", "any"),
+            ("`.beans`", "Check your bean balance", "any"),
+            ("`.tip <@user> <amount>`", "Send beans to another user", "any"),
+            ("`.bean_top`", "Lists the richest users", "any"),
+            ("`.daily`", "Get your daily reward!", "any")
+        ]
+    },
+    "Faith": {
+        "description": "send testimonies, get Bible verses, and more! (WIP)",
+        "emoji": "✝️",
+        "commands": [
+            ("`.send_anonymous_testimony`", "Sends your testimony anonymously into the testimonies chat", "any")
+        ]
+    },
+    "Admin": {
+        "description": "Bot configuration and database management.",
+        "emoji": "⚙️",
+        "commands": [
+            ("`.add_gif <type> <link>`", "Adds a new GIF", "bot_admin"),
+            ("`.remove_gif <type> <link>`", "Removes a GIF", "bot_admin"),
+            ("`.add_quote <author> <quote>`", "Adds a new quote", "bot_admin"),
+            ("`.remove_quote <quote>`", "Removes a quote", "bot_admin"),
+            ("`.add_eight_ball <response>`", "Add an 8-ball response", "bot_admin"),
+            ("`.remove_eight_ball <response>`", "Remove an 8-ball response", "bot_admin")
+        ]
+    }
+}
+
+
+# 3. The New Dynamic Help Command
 @bot.command()
 @is_authorized("any")
-async def help(ctx):
-    embed = discord.Embed(
-        title="☕ CafeBot Command Menu",
-        description="Here is a list of commands you can use.",
-        color=discord.Color.gold()
-    )
+async def help(ctx, module_name: str = None):
+    # If they just type .help (no module specified)
+    if module_name is None:
+        embed = discord.Embed(
+            title="☕ CafeBot Modules",
+            description="Use `.help <module>` to see the commands inside it!",
+            color=discord.Color.gold()
+        )
 
-    # --- Misc Module ---
-    misc_text = """
-    `.ping` - Check if the bot is awake
-    `.help` - Display this command menu
-    """
-    embed.add_field(name="🔧 Misc", value=misc_text, inline=False)
+        for mod_name, mod_data in COMMAND_MODULES.items():
+            # Check if user has access to at least ONE command in this module
+            can_see_module = any(check_cmd_permission(ctx, req) for _, _, req in mod_data["commands"])
 
-    # --- Moderation Module ---
-    mod_text = """
-    `.purge <amount>` - Delete messages (Admin)
-    `.lockdown [state] [all]` - Lock channels (Admin)
-    `.slowmode <on/off> [seconds]` - Set chat delay (Admin)
-    `.kick <user> [reason]` - Kick a member
-    `.ban <user> [reason]` - Ban a member
-    `.softban <user> [days] [reason]` - Ban & delete msgs, then unban
-    `.unban <id>` - Unban a user by ID
-    `.mute <user> [mins] [reason]` - Timeout a user
-    `.unmute <user>` - Remove timeout
-    `.whois <user>` - View user account info (Admin)
-    """
-    embed.add_field(name="🛡️ Moderation", value=mod_text, inline=False)
+            if can_see_module:
+                embed.add_field(
+                    name=f"{mod_data['emoji']} {mod_name}",
+                    value=mod_data["description"],
+                    inline=False
+                )
 
-    # --- DnD Module ---
-    dnd_text = """
-    `.roll <dice> [modifier]` - Roll dice (e.g. `.roll d20`, `.roll 2d6 +3`)
-    `.roll_multiple <input>` - Roll multiple sets of dice
-    `.create_character <name> <class>` - Create and save a specified character
-    `.view_characters` - Lists all your currently saved characters
-    """
-    embed.add_field(name="🎲 DnD", value=dnd_text, inline=False)
+        embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+        await ctx.send(embed=embed)
 
-    # --- Fun Module ---
-    fun_text = """
-    `.marry <user>` - Propose to another user (or accept if they proposed to you)
-    `.divorce` - End your current marriage
-    `.partner` - Lists your current marriage and how long you have been married
-    `.marriage_top` - Lists the top ten marriages in the server by length.
-    `.duel <user>` - Have a duel with the specified user!
-    `.quote` - Generate a random quote!
-    `.quote_list <user> <amount>` - Generates a random quote which is sent by or mentions a specified user
-    `.quote_count <user>` - Lists how many quotes a quoter has.
-    `.quote_top` - Lists the top quoters.
-    `Emotes:` `.punch`, `.kill`, `.kiss`, `.slap`, `.tickle`, `.wave`, `.cry`, `.happy`
-    `.eight_ball <question>` - Ask the eight ball a question and have it generate a response!
-    `.coinflip` - Flip a coin!
-    """
-    embed.add_field(name="💕 Fun", value=fun_text, inline=False)
+    # If they typed .help <module>
+    else:
+        # Find the module, ignoring capitalization
+        target_module = None
+        for mod_name in COMMAND_MODULES:
+            if mod_name.lower() == module_name.lower():
+                target_module = mod_name
+                break
 
-    # --- Economy Module ---
-    economy_text = """
-    `.shift` - Work a shift to earn Coffee Beans
-    `.beans` - Check your bean balance
-    `.tip <@user> <amount>` - Send beans to another user
-    `.bean_top` - Lists the richest users.
-    `.daily` - Get your daily reward!
-    """
-    embed.add_field(name="☕ Economy", value=economy_text, inline=False)
+        if not target_module:
+            await ctx.send(f"❌ Could not find a module named `{module_name}`.")
+            return
 
-    # Footer
-    embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+        mod_data = COMMAND_MODULES[target_module]
 
-    await ctx.send(embed=embed)
+        embed = discord.Embed(
+            title=f"{mod_data['emoji']} {target_module} Commands",
+            description=mod_data["description"],
+            color=discord.Color.gold()
+        )
 
+        # Loop through commands and only add the ones they have permission for
+        visible_commands = 0
+        for cmd_usage, cmd_desc, req_permission in mod_data["commands"]:
+            if check_cmd_permission(ctx, req_permission):
+                embed.add_field(name=cmd_usage, value=cmd_desc, inline=False)
+                visible_commands += 1
 
-@bot.command()
-@is_authorized("bot_admin")
-async def admin_help(ctx):
-    embed = discord.Embed(
-        title="☕ CafeBot Admin Commands",
-        description="Use these commands to manage the bot's GIF database and settings.",
-        color=discord.Color.gold()
-    )
+        # If they found the module but don't have access to any commands inside it
+        if visible_commands == 0:
+            await ctx.send("🚫 You do not have permission to view commands in this module.")
+            return
 
-    embed.add_field(
-        name="`.add_gif <type> <link>`",
-        value="Adds a new GIF link to the database.\n*Example: `.add_gif punch https://tenor.com/example.gif`*",
-        inline=False
-    )
-
-    embed.add_field(
-        name="`.remove_gif <type> <link>`",
-        value="Removes a specific GIF link from the database.\n*Example: `.remove_gif punch https://tenor.com/example.gif`*",
-        inline=False
-    )
-
-    embed.add_field(
-        name="`.add_quote <quoter> <quote>`",
-        value="Adds a new quote into the database.",
-        inline=False
-    )
-
-    embed.add_field(
-        name="`.remove_quote <quote>`",
-        value="Removes the specified quote from the datebase.",
-        inline=False
-    )
-
-    embed.add_field(
-        name="`.add_eight_ball <response>`",
-        value="Adds the specified eight ball response to the database.",
-        inline=False
-    )
-
-    embed.add_field(
-        name="`.remove_eight_ball <response>`",
-        value="Removes the specified eight ball response from the database.",
-        inline=False
-    )
-
-    embed.set_footer(text="CafeBot Administration | Use responsibly! ☕")
-    embed.set_thumbnail(url=ctx.bot.user.display_avatar.url)
-
-    await ctx.send(embed=embed)
+        embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+        await ctx.send(embed=embed)
 
 
 @bot.command()
@@ -384,6 +439,85 @@ async def smooch(ctx, target: discord.Member = None):
 
 @bot.command()
 @is_authorized("any")
+async def hug(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "hug", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def sip(ctx):
+    # No target needed!
+    await FunModule.gif(ctx, "sip")
+
+
+@bot.command()
+@is_authorized("any")
+async def spill(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "spill", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def shocked(ctx):
+    await FunModule.gif(ctx, "shocked")
+
+
+@bot.command()
+@is_authorized("any")
+async def pat(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "pat", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def cuddle(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "cuddle", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def cheer(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "cheer", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def bonk(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "bonk", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def bite(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "bite", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def stare(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "stare", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def explode(ctx):
+    await FunModule.gif(ctx, "explode")
+
+
+@bot.command()
+@is_authorized("any")
+async def sleep(ctx):
+    await FunModule.gif(ctx, "sleep")
+
+
+@bot.command()
+@is_authorized("any")
+async def obliterate(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "purge", target)
+
+
+@bot.command()
+@is_authorized("any")
 async def eight_ball(ctx, *, question: str = "No question asked"):
     await FunModule.magic_eight_ball(ctx, question)
 
@@ -414,7 +548,7 @@ async def beans(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def tip(ctx, target: discord.Member, amount: int):
+async def tip(ctx, target: discord.Member, amount: float):
     await EconomyModule.tip(ctx, target, amount)
 
 
@@ -449,6 +583,7 @@ async def quote_count(ctx, user: str):
 
 
 @bot.command()
+@is_authorized("any")
 async def quote_top(ctx):
     await FunModule.quote_top(ctx)
 
@@ -469,6 +604,29 @@ async def coinflip(ctx):
 @is_authorized("any")
 async def daily(ctx):
     await EconomyModule.daily(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def send_anonymous_testimony(ctx, *, message: str):
+    await FaithModule.send_testimony(ctx, message)
+
+@bot.command()
+@is_authorized("any")
+async def verse(ctx):
+    await FaithModule.random_verse(ctx)
+
+@bot.command()
+@is_authorized("bot_admin")
+async def add_verse(ctx, reference: str, *, verse_text: str):
+    # We use '*' for verse_text so it captures the whole sentence
+    # Usage: .add_verse "John 3:16" For God so loved...
+    await BotAdminModule.add_verse(ctx, reference, verse_text)
+
+@bot.command()
+@is_authorized("bot_admin")
+async def remove_verse(ctx, *, reference: str):
+    await BotAdminModule.remove_verse(ctx, reference)
 
 
 @bot.event

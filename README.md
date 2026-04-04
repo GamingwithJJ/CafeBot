@@ -2,64 +2,125 @@
 
 CafeBot is a multi-purpose, modular Discord bot built with Python and `discord.py`. It features a custom data-storage solution and provides a wide array of utilities ranging from server moderation and tabletop RPG (D&D) mechanics to a fully functioning server economy and social engagement tools.
 
-## 🚀 Features
+---
 
-* **Modular Architecture:** The bot's logic is cleanly separated into dedicated modules (`EconomyModule`, `FunModule`, `DndModule`, etc.) to ensure maintainability and scalability.
-* **Custom Data Persistence:** Implements a JSON-based local storage system (`DataStorage.py`) that serializes object-oriented Python classes (like D&D characters and User profiles) into persistent data files. 
-* **Custom Permissions Wrapper:** Utilizes a custom `@is_authorized` decorator to strictly manage access levels (Server Admin, Moderator, Bot Admin) across all commands.
-* **Tabletop RPG Mechanics:** Includes complex dice rolling (supporting modifiers and multiple dice sets) and an object-oriented D&D character creator that tracks stats, proficiencies, and HP.
-* **Server Economy:** A built-in economy system where users can work shifts, claim daily rewards, maintain streaks, and tip other users, complete with a leaderboard system.
-* **Engagement & Social Systems:** Features a robust quote-saving system, an interactive duel mini-game, a marriage registry, and categorized GIF reactions.
-* **Robust Moderation:** Essential server management tools including purging, channel lockdowns, slowmode toggling, and user timeout/kick/ban capabilities.
+## Features
 
-## 🛠️ Tech Stack
+- **Modular Architecture** — Bot logic is cleanly separated into dedicated modules (`EconomyModule`, `FunModule`, `DndModule`, etc.) for maintainability and scalability.
+- **Custom Data Persistence** — JSON-based local storage (`DataStorage.py`) that serializes object-oriented Python classes (D&D characters, user profiles, etc.) into persistent data files.
+- **Custom Permissions Wrapper** — A `@is_authorized` decorator strictly manages access levels (Server Admin, Moderator, Bot Admin) across all commands.
+- **Tabletop RPG Mechanics** — Complex dice rolling with modifiers and an object-oriented D&D character creator tracking stats, proficiencies, and HP.
+- **Server Economy** — Users can work shifts, claim daily rewards, maintain streaks, and tip others, with a leaderboard system.
+- **Engagement & Social Systems** — Quote saving, an interactive duel mini-game, a marriage registry, and categorized GIF reactions.
+- **Robust Moderation** — Channel purging, lockdowns, slowmode toggling, and user timeout/kick/ban capabilities.
 
-* **Language:** Python 3.x
-* **Library:** `discord.py`
-* **Configuration:** `python-dotenv` for secure environment variable management.
+---
 
-## 💻 Installation and Setup
+## Tech Stack
+
+| Component     | Technology               |
+|---------------|--------------------------|
+| Language      | Python 3.x               |
+| Bot Library   | `discord.py 2.x`         |
+| Configuration | `python-dotenv`          |
+| Data Storage  | JSON (local filesystem)  |
+
+---
+
+## Prerequisites
+
+- Python 3.10+
+- A Discord bot token ([Discord Developer Portal](https://discord.com/developers/applications))
+- The bot must be invited to your server with the **Message Content Intent** enabled
+
+---
+
+## Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/yourusername/CafeBot.git](https://github.com/yourusername/CafeBot.git)
+   git clone https://github.com/yourusername/CafeBot.git
    cd CafeBot
    ```
 
 2. **Create and activate a virtual environment:**
-   This keeps the bot's dependencies isolated from your system's global Python environment.
-   * **Windows:**
-     ```bash
-     python -m venv venv
-     venv\Scripts\activate
-     ```
-   * **macOS/Linux:**
-     ```bash
-     python3 -m venv venv
-     source venv/bin/activate
-     ```
+   ```bash
+   # Windows
+   python -m venv venv
+   venv\Scripts\activate
+
+   # macOS/Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
 3. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Environment Setup:**
-   Create a `.env` file in the root directory and add your bot token and administrator IDs (comma-separated):
+4. **Configure environment variables:**
+
+   Create a `.env` file in the root directory:
    ```env
    token=YOUR_DISCORD_BOT_TOKEN
-   administrators=YOUR_DISCORD_ID,YOUR_FRIENDS_DISCORD_ID
+   administrators=YOUR_DISCORD_ID,ANOTHER_DISCORD_ID
    ```
+
+   | Variable         | Description                                              |
+   |------------------|----------------------------------------------------------|
+   | `token`          | Your Discord bot token                                   |
+   | `administrators` | Comma-separated Discord user IDs with bot-admin access   |
 
 5. **Run the bot:**
    ```bash
    python botMain.py
    ```
 
-## 📁 Project Structure
+---
 
-* `botMain.py`: The main entry point and command router.
-* `DataStorage.py`: Handles loading, saving, and caching of all JSON data.
-* `Classes/`: Contains the object-oriented data models (`UserSavesClass`, `DndCharacter`, `QuoteClass`,`RequestClass`).
-* `*Module.py`: The separated logical controllers for different bot functions (Economy, DnD, Moderation, Fun).
-* `Saves/`: Directory where the persistent JSON data files are stored.
+## Project Structure
+
+```
+CafeBot/
+├── botMain.py            # Entry point and command router
+├── DataStorage.py        # JSON load/save/cache handler
+├── EconomyModule.py      # Economy commands (work, daily, tip, leaderboard)
+├── DndModule.py          # D&D commands (character creation, dice rolling)
+├── FunModule.py          # Fun/social commands (duels, GIFs, marriage, quotes)
+├── ModerationModule.py   # Moderation commands (purge, lockdown, ban, kick)
+├── BotAdminModule.py     # Bot-admin only commands
+├── Classes/
+│   ├── UserSavesClass.py # User profile data model
+│   ├── DndCharacter.py   # D&D character data model
+│   ├── QuoteClass.py     # Quote data model
+│   └── RequestClass.py   # Request data model
+├── Saves/
+│   ├── MagicEightBall.json
+│   ├── gif_messages.json
+│   └── gifs.json
+└── requirements.txt
+```
+
+---
+
+## Configuration Notes
+
+- The `Saves/` directory is created and managed automatically by `DataStorage.py`.
+- The `.env` file should **never** be committed to version control. It is listed in `.gitignore`.
+- Bot admin IDs defined in `administrators` have elevated permissions beyond standard Discord server roles.
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit your changes: `git commit -m "Add your feature"`
+4. Push and open a pull request
+
+---
+
+## License
+
+This project is currently unlicensed. See [choosealicense.com](https://choosealicense.com) if you'd like to add one.
