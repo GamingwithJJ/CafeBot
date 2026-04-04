@@ -18,5 +18,8 @@ Saves/quotes.json
 Saves/QuoteUsers.json
 Saves/UserSaves.json
 
+#Windows files
+ffmpeg.exe
+
 # OS generated files
 .DS_Store

@@ -1,6 +1,12 @@
 import discord
 import asyncio
 import yt_dlp
+import platform
+
+if platform.system() == "Windows": # So the Module works on Linux and Windows
+    FFMPEG_EXECUTABLE = "ffmpeg.exe"
+else:
+    FFMPEG_EXECUTABLE = "./ffmpeg"
 
 # These settings tell yt-dlp to find the lightest, fastest audio stream
 ytdl_format_options = {
@@ -40,14 +46,16 @@ async def play_next(ctx):
     queue = get_queue(ctx.guild.id)
 
     if len(queue) > 0:
-        # Grab the next song in line
         song = queue.pop(0)
         vc = ctx.voice_client
 
-        # Create the audio source using FFmpeg
-        audio_source = discord.FFmpegPCMAudio(song['url'], **ffmpeg_options)
+        # We just drop the global FFMPEG_EXECUTABLE right here!
+        audio_source = discord.FFmpegPCMAudio(
+            song['url'],
+            executable=FFMPEG_EXECUTABLE,
+            **ffmpeg_options
+        )
 
-        # Play the audio. When it finishes, it automatically triggers this function again!
         vc.play(audio_source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
 
         await ctx.send(f"🎶 Now playing: **{song['title']}**")
