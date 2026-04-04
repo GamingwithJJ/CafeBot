@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import imageio_ffmpeg
 import yt_dlp
 import platform
 import os
