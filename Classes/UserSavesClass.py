@@ -52,7 +52,7 @@ class User:
 
         for request in self.requests[request_type]:
             request_user = str(request.get_user())
-            if request.get_user() == user_sent_str:  # Compare the ID inside the object
+            if request_user == user_sent_str:  # Compare the ID inside the object
                 return request
 
         print(f"Error: User ID {user_sent} not found")

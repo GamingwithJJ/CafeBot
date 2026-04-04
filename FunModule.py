@@ -121,6 +121,7 @@ async def duel(ctx, target: discord.Member):
         embed.set_field_at(0, name=f"{author.display_name}'s HP", value=f"❤️ {author_hp}/100", inline=True)
         embed.set_field_at(1, name=f"{target.display_name}'s HP", value=f"❤️ {target_hp}/100", inline=True)
         await duel_msg.edit(embed=embed)
+        await asyncio.sleep(1.5)
 
 
     embed.title = "🏆 Duel Finished!"
