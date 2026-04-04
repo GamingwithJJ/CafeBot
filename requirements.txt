@@ -11,3 +11,4 @@ yarl==1.22.0
 python-dotenv==1.2.2
 discord.py[voice]>=2.7.1
 yt-dlp
+imageio-ffmpeg

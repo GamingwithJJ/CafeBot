@@ -711,6 +711,22 @@ async def leave(ctx):
     await MusicModule.leave_channel(ctx)
 
 
+@bot.command()
+@is_authorized("bot_admin")  # Or "any" if you want to test it easily
+async def host_check(ctx):
+    """Diagnoses the cloud host's exact hardware."""
+    import platform
+
+    info = (
+        f"**OS System:** {platform.system()}\n"
+        f"**Machine (CPU):** {platform.machine()}\n"
+        f"**Architecture:** {platform.architecture()[0]}\n"
+        f"**Linux Release:** {platform.release()}"
+    )
+
+    await ctx.send(f"🖥️ **Host Diagnostic Report:**\n```text\n{info}\n```")
+
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):

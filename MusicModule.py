@@ -4,15 +4,7 @@ import yt_dlp
 import platform
 import os
 
-if platform.system() == "Windows": # So the Module works on Linux and Windows
-    FFMPEG_EXECUTABLE = "ffmpeg.exe"
-else:
-    FFMPEG_EXECUTABLE = "./ffmpeg"
-
-    try:
-        os.chmod(FFMPEG_EXECUTABLE, 0o777)
-    except Exception as e:
-        print(f"Could not change permissions: {e}")
+FFMPEG_EXECUTABLE = imageio_ffmpeg.get_ffmpeg_exe()
 
 # These settings tell yt-dlp to find the lightest, fastest audio stream
 ytdl_format_options = {
