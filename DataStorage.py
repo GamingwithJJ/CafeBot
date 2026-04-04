@@ -18,6 +18,10 @@ MESSAGES_FILE = "Saves/gif_messages.json"
 MAGIC_EIGHT_BALL_FILE = "Saves/MagicEightBall.json"
 QUOTE_USERS_FILE = "Saves/QuoteUsers.json"
 VERSES_FILE = "Saves/verses.json"
+TRIVIA_QUESTIONS_FILE = "Saves/trivia_questions.json"
+
+# Format: { "category_name": { "sub_category_name": [ ("Question", ["answer1", "answer2"]) ] } }
+trivia_questions = {}
 
 verses = []
 
@@ -41,6 +45,7 @@ gif_messages = {}
 """
 Checks if a user with a specified discord id exists and creats one if it does not.
 """
+
 
 def get_or_create_user(user_id):
     user_id_str = str(user_id)
@@ -67,6 +72,7 @@ def save_quote_users():
         print("✅ Quote users saved!")
     except Exception as e:
         print(f"Error saving quote users!")
+
 
 def save_quotes():
     """Saves quotes to JSON file."""
@@ -114,6 +120,16 @@ def save_verses():
         print(f"❌ Error saving verses: {e}")
 
 
+def save_trivia_bank():
+    """Saves the trivia dictionary to the JSON file."""
+    try:
+        with open(TRIVIA_QUESTIONS_FILE, "w", encoding="utf-8") as f:
+            json.dump(trivia_questions, f, indent=4)
+        print("✅ Trivia Bank saved!")
+    except Exception as e:
+        print(f"❌ Error saving trivia bank: {e}")
+
+
 def save_all():
     """Saves all bot configuration data."""
     save_quotes()
@@ -122,11 +138,12 @@ def save_all():
     save_eight_ball()
     save_quote_users()
     save_verses()
+    save_trivia_bank()
 
 
 def load_all():
     """Loads all data from files. Returns defaults if files don't exist."""
-    global quotes, gifs, gif_messages, magic_eight_ball, quote_users, verses
+    global quotes, gifs, gif_messages, magic_eight_ball, quote_users, verses, trivia_questions
 
     # Load quotes
     quotes_data = {}
@@ -180,7 +197,21 @@ def load_all():
     else:
         verses = []
 
-    print(f"✅ Loaded {len(quotes)} quotes, {len(gifs)} gif categories, {len(gif_messages)} message categories, and {len(magic_eight_ball)} eight ball responses.")
+    if os.path.exists(TRIVIA_QUESTIONS_FILE):
+        with open(TRIVIA_QUESTIONS_FILE, "r", encoding="utf-8") as f:
+            trivia_questions = json.load(f)
+    else:
+        trivia_questions = {}
+
+    print(
+        f"✅ Loaded {len(quotes)} quote authors, "
+        f"{len(quote_users)} quote users, "
+        f"{len(gifs)} gif categories, "
+        f"{len(gif_messages)} message categories, "
+        f"{len(magic_eight_ball)} eight ball responses, "
+        f"{len(verses)} verses, and "
+        f"{len(trivia_questions)} trivia categories."
+    )
 
 
 def save_user_data():
@@ -219,6 +250,7 @@ def load_user_data():
             last_daily_string = user_dict.get("last_daily")
             user.last_daily = datetime.datetime.fromisoformat(last_daily_string) if last_daily_string else None
             user.daily_reward_streak = user_dict.get("daily_reward_streak", 0)
+            user.enabled_trivia_categories = user_dict.get("enabled_trivia_categories")
 
             # Rebuild DndCharacter objects
             for char_data in user_dict.get("characters", []):

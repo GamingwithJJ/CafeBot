@@ -30,6 +30,9 @@ class User:
         self.last_daily = None
         self.daily_reward_streak = 0
 
+        #Trivia
+        self.enabled_trivia_categories = []
+
     def set_marriage_partner(self, new_partner: int):
         self.marriage_partner = new_partner
         self.partner_gained_date = datetime.datetime.now()
@@ -126,7 +129,8 @@ class User:
             "last_shift": self.last_shift.isoformat() if self.last_shift else None,
             "partner_gained_date": self.partner_gained_date.isoformat() if self.partner_gained_date else None,
             "last_daily": self.last_daily.isoformat() if self.last_daily else None,
-            "daily_reward_streak": self.daily_reward_streak
+            "daily_reward_streak": self.daily_reward_streak,
+            "enabled_trivia_categories" : self.enabled_trivia_categories
         }
 
     def to_json(self):

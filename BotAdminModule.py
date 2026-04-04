@@ -99,29 +99,58 @@ async def remove_eight_ball(ctx, response_to_remove: str):
     await ctx.send("Could not find specified response")
 
 
-async def add_verse(ctx, reference: str, verse_text: str):
+async def add_verse(ctx, reference: str, verse_text: str, version: str):
     """Adds a new Bible verse to the database"""
     # Check if we already have it
     for v in DataStorage.verses:
-        if v.get_reference().lower() == reference.lower():
+        if v.get_reference().lower() == reference.lower() and v.get_version().lower() == version.lower():
             await ctx.send(f"❌ You already have {reference} saved!")
             return
 
-    new_verse = Verse(verse_text, reference)
+    new_verse = Verse(verse_text, reference, version)
     DataStorage.verses.append(new_verse)
     DataStorage.save_verses()
 
     await ctx.send(f"✅ Successfully added **{reference}**!")
 
 
-async def remove_verse(ctx, reference: str):
+async def remove_verse(ctx, reference: str, version: str):
     """Removes a verse by its reference"""
     for index, v in enumerate(DataStorage.verses):
-        if v.get_reference().lower() == reference.lower():
+        if v.get_reference().lower() == reference.lower() and v.get_version().lower() == version.lower():
             DataStorage.verses.pop(index)
             DataStorage.save_verses()
             await ctx.send(f"✅ Removed **{reference}**!")
             return
 
     await ctx.send("❌ Could not find a verse with that reference.")
+
+
+async def add_trivia(ctx, category: str, sub_category: str, question: str, answers: str):
+    """
+    Adds a new trivia question to the bank dynamically.
+    Answers should be separated by commas (e.g., "coffee, beans, java").
+    """
+    category = category.lower()
+    sub_category = sub_category.lower()
+
+    # Split the comma-separated string into a clean list of lowercase answers
+    acceptable_answers = [ans.strip().lower() for ans in answers.split(",")]
+
+    # If the category doesn't exist yet, create it!
+    if category not in DataStorage.trivia_questions:
+        DataStorage.trivia_questions[category] = {}
+
+    # If the sub-category doesn't exist yet, create it!
+    if sub_category not in DataStorage.trivia_questions[category]:
+        DataStorage.trivia_questions[category][sub_category] = []
+
+    # Format the data into our tuple format and append it
+    new_question_data = [question, acceptable_answers]
+    DataStorage.trivia_questions[category][sub_category].append(new_question_data)
+
+    # Save the file
+    DataStorage.save_trivia_bank()
+
+    await ctx.send(f"✅ Added new question to **{category.capitalize()} -> {sub_category.capitalize()}**!")
 

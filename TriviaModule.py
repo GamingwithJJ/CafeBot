@@ -1,0 +1,150 @@
+import discord
+import asyncio
+import random
+import DataStorage
+
+
+active_trivia_channels = []  # List of channel id's currently with ongoing trivia
+
+
+class TriviaConfigView(discord.ui.View):
+    def __init__(self, user_data):
+        super().__init__(timeout=120)  # Menu expires after 2 minutes
+        self.user_data = user_data
+
+        # Build the dropdown options dynamically from the TRIVIA_BANK
+        options = []
+        for category in DataStorage.trivia_questions.keys():
+            # Check the box if they already have it enabled in their save file
+            is_enabled = category in self.user_data.enabled_trivia_categories
+            options.append(
+                discord.SelectOption(label=category.capitalize(), value=category, default=is_enabled)
+            )
+
+        # Create the dropdown menu
+        self.select_menu = discord.ui.Select(
+            placeholder="Select which categories to enable...",
+            min_values=1,  # Must have at least 1 category enabled
+            max_values=len(options),
+            options=options
+        )
+        self.select_menu.callback = self.select_callback
+        self.add_item(self.select_menu)
+
+    # What happens when they make a selection
+    async def select_callback(self, interaction: discord.Interaction):
+        # Security: Only the person who ran the command can click the menu
+        if interaction.user.id != int(self.user_data.discord_id):
+            await interaction.response.send_message("❌ This is not your menu!", ephemeral=True)
+            return
+
+        # Save their new selections to their user profile
+        self.user_data.enabled_trivia_categories = self.select_menu.values
+        DataStorage.save_user_data()
+
+        await interaction.response.send_message(f"✅ Your trivia categories have been updated!", ephemeral=True)
+
+
+async def open_config(ctx, user_data):
+    """Opens the interactive config menu for the user."""
+    embed = discord.Embed(
+        title="⚙️ Trivia Configuration",
+        description= f"\nUse the menu below to toggle which categories appear in your games!",
+        color=discord.Color.gold()
+    )
+    view = TriviaConfigView(user_data)
+    await ctx.send(embed=embed, view=view)
+
+
+async def start_session(ctx, rounds: int, user_data):
+    if ctx.channel.id in active_trivia_channels:
+        await ctx.send("🚫 A trivia session is already happening in this channel!")
+        return
+
+    # 1. Gather Questions based on USER CONFIG
+    available_questions = []
+
+    for category in user_data.enabled_trivia_categories:
+        if category in DataStorage.trivia_questions:
+            for sub_category in DataStorage.trivia_questions[category]:
+                available_questions.extend(DataStorage.trivia_questions[category][sub_category])
+
+    if len(available_questions) < rounds:
+        await ctx.send(
+            f"⚠️ You requested {rounds} rounds, but your enabled categories only have {len(available_questions)} questions available! Please enable more categories or lower the round count.")
+        return
+
+    # Lock the channel
+    active_trivia_channels.append(ctx.channel.id)
+    scores = {}
+
+    enabled_cats_string = ", ".join([c.capitalize() for c in user_data.enabled_trivia_categories])
+    await ctx.send(
+        f"🎉 **Trivia Session Starting!**\n**Enabled Topics:** {enabled_cats_string}\n**Rounds:** {rounds}\nThe first person to type the correct answer wins the round. Get ready...")
+    await asyncio.sleep(3)
+
+    try:
+        # 2. The Game Loop
+        for round_num in range(1, rounds + 1):
+
+            # --- THE FIX ---
+            # Grab the item first, unpack it, and remove the exact item!
+            chosen_item = random.choice(available_questions)
+            question_text, acceptable_answers = chosen_item
+            available_questions.remove(chosen_item)
+            # --------------
+
+            embed = discord.Embed(
+                title=f"Round {round_num} of {rounds}",
+                description=f"**{question_text}**",
+                color=discord.Color.blue()
+            )
+            embed.set_footer(text="You have 15 seconds to answer!")
+            await ctx.send(embed=embed)
+
+            def check(m):
+                return m.channel == ctx.channel and not m.author.bot
+
+            try:
+                while True:
+                    msg = await ctx.bot.wait_for('message', timeout=15.0, check=check)
+
+                    if any(answer in msg.content.lower() for answer in acceptable_answers):
+                        official_answer = acceptable_answers[0].capitalize()
+                        await ctx.send(
+                            f"✅ **{msg.author.display_name}** got it right! The answer was: {official_answer}")
+
+                        scores[msg.author] = scores.get(msg.author, 0) + 1
+                        break
+
+            except asyncio.TimeoutError:
+                official_answer = acceptable_answers[0].capitalize()
+                await ctx.send(f"⏳ Time's up! Nobody got it. The answer was: **{official_answer}**")
+
+            await asyncio.sleep(2)
+
+    finally:
+        # 3. The Finale
+        active_trivia_channels.remove(ctx.channel.id)
+
+        if not scores:
+            await ctx.send("🛑 **Trivia Over!** Nobody scored any points. Better luck next time!")
+            return
+
+        sorted_scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        winner = sorted_scores[0][0]
+        winning_score = sorted_scores[0][1]
+
+        embed = discord.Embed(
+            title="🏆 Trivia Results!",
+            description=f"**{winner.mention} wins with {winning_score} points!**",
+            color=discord.Color.gold()
+        )
+
+        reward_amount = winning_score * 25
+        user_winner_data = DataStorage.get_or_create_user(winner.id)
+        user_winner_data.ajust_beans(reward_amount)
+        DataStorage.save_user_data()
+
+        embed.set_footer(text=f"Awarded {reward_amount} Coffee Beans to the winner!")
+        await ctx.send(embed=embed)

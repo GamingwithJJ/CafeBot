@@ -8,6 +8,7 @@ import FunModule
 import ModerationModule
 import BotAdminModule
 import FaithModule
+import TriviaModule
 
 from dotenv import dotenv_values
 
@@ -102,81 +103,88 @@ COMMAND_MODULES = {
         "emoji": "🔧",
         "commands": [
             ("`.ping`", "Check if the bot is awake", "any"),
-            ("`.help [module]`", "Display this menu", "any")
+            ("`.help [module]`", "Show all modules, or use `.help <module>` to list the commands inside it", "any")
         ]
     },
     "Moderation": {
         "description": "Server management and moderation tools.",
         "emoji": "🛡️",
         "commands": [
-            ("`.purge <amount>`", "Delete messages", "server_admin"),
-            ("`.lockdown [state] [all]`", "Lock channels", "server_admin"),
-            ("`.slowmode <on/off> [seconds]`", "Set chat delay", "server_admin"),
-            ("`.kick <user> [reason]`", "Kick a member", "kick"),
-            ("`.ban <user> [reason]`", "Ban a member", "ban"),
-            ("`.softban <user> [days] [reason]`", "Ban & delete msgs, then unban", "server_admin"),
-            ("`.unban <id>`", "Unban a user by ID", "ban"),
-            ("`.mute <user> [mins] [reason]`", "Timeout a user", "server_admin"),
-            ("`.unmute <user>`", "Remove timeout", "server_admin"),
-            ("`.whois <user>`", "View user account info", "server_admin")
+            ("`.purge <amount>`", "Delete the last `<amount>` messages in the current channel", "server_admin"),
+            ("`.lockdown [True/False] [all]`", "Lock or unlock the current channel (`True` = lock, `False` = unlock). Pass `True` as the second argument to apply to every text channel in the server at once", "server_admin"),
+            ("`.slowmode [True/False] [seconds]`", "Set a per-message cooldown in the current channel. Defaults to 500s if no time is given. Pass `False` to disable. Maximum is 6 hours (21600s)", "server_admin"),
+            ("`.kick <user> [reason]`", "Kick a member from the server. They can rejoin using a new invite", "kick"),
+            ("`.ban <user> [reason]`", "Permanently ban a member from the server", "ban"),
+            ("`.softban <user> [days] [reason]`", "Ban a member to wipe their recent messages, then immediately unban them so they can rejoin. `[days]` sets how many days of messages to delete (default: 1)", "server_admin"),
+            ("`.unban <user_id>`", "Unban a user by their Discord user ID (right-click → Copy ID with Developer Mode on)", "ban"),
+            ("`.mute <user> [mins] [reason]`", "Put a user in Discord timeout for `[mins]` minutes (default: 10). They cannot send messages or speak in voice while timed out", "server_admin"),
+            ("`.unmute <user>`", "Remove an active timeout from a user early", "server_admin"),
+            ("`.whois <user>`", "View a detailed profile of a server member: their ID, nickname, account creation date, server join date, and all their roles", "server_admin")
         ]
     },
     "DnD": {
-        "description": "Tabletop RPG dice and character management.",
+        "description": "Tabletop RPG dice rolling and character management.",
         "emoji": "🎲",
         "commands": [
-            ("`.roll <dice> [modifier]`", "Roll dice (e.g. .roll d20)", "any"),
-            ("`.roll_multiple <input>`", "Roll multiple sets of dice", "any"),
-            ("`.create_character <name> <class>`", "Create and save a character", "any"),
-            ("`.view_characters`", "Lists all your currently saved characters", "any")
+            ("`.roll <NdX> [modifier]`", "Roll dice using standard notation (e.g. `.roll 2d20`, `.roll 1d6 3`). Supported dice: d4, d6, d8, d10, d12, d20, d100. An optional modifier is added to the final total. Max 100 dice per roll", "any"),
+            ("`.roll_multiple <input>`", "Roll multiple sets of dice in one command, separated by commas (e.g. `.roll_multiple 2d20 3, 1d8`). Each group is rolled and reported separately", "any"),
+            ("`.create_character <class> <name>`", "Create and save a new D&D character. Valid classes: Artificer, Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard. Each name must be unique per user", "any"),
+            ("`.view_characters`", "List all D&D characters you currently have saved", "any")
         ]
     },
     "Fun": {
-        "description": "Social commands, marriage, quotes, and games.",
+        "description": "Social commands, marriage, quotes, duels, trivia, and games.",
         "emoji": "💕",
         "commands": [
-            ("`.marry <user>`", "Propose to another user", "any"),
-            ("`.divorce`", "End your current marriage", "any"),
-            ("`.partner`", "View your marriage certificate", "any"),
-            ("`.marriage_top`", "Top ten marriages in the server", "any"),
-            ("`.duel <user>`", "Have a duel with the specified user!", "any"),
-            ("`.quote`", "Generate a random quote!", "any"),
-            ("`.quote_list <user> <amount>`", "Quotes from a specific user", "any"),
-            ("`.quote_count <user>`", "Check how many quotes someone has", "any"),
-            ("`.quote_top`", "Top quoters leaderboard", "any"),
-            ("`.eight_ball <question>`", "Ask the eight ball a question", "any"),
-            ("`.coinflip`", "Flip a coin!", "any"),
-            ("`Emotes:`", "`.punch`, `.kill`, `.kiss`, etc.", "any")
+            ("`.marry <user>`", "Send a marriage proposal to another user. If they also use `.marry` on you, you are automatically wed. Both users must currently be single", "any"),
+            ("`.divorce`", "End your current marriage. This immediately severs the bond for both partners", "any"),
+            ("`.partner`", "View your marriage certificate, showing your partner and how long you've been together", "any"),
+            ("`.marriage_top`", "See the top 10 longest-running marriages in the server, sorted by how long ago they were formed", "any"),
+            ("`.duel <user>`", "Start a turn-based duel against another user. Both combatants begin with 100 HP. Each round, both roll a d20 and deal that much damage — last one standing wins. You can also challenge the bot (good luck)", "any"),
+            ("`.quote`", "Display a single random quote from the quote database", "any"),
+            ("`.quotes <amount>`", "Display multiple random quotes at once (maximum 5)", "any"),
+            ("`.quote_list <user> <amount>`", "Display random quotes from a specific person by their author name in the database (maximum 5 at a time)", "any"),
+            ("`.quote_count <user>`", "Check how many quotes a specific person has saved in the database", "any"),
+            ("`.quote_top`", "See the top 10 people with the most quotes in the database", "any"),
+            ("`.eight_ball <question>`", "Consult the Magic 8-Ball with a yes/no question for a cryptic answer", "any"),
+            ("`.coinflip`", "Flip a coin and get Heads or Tails", "any"),
+            ("`.trivia <rounds>`", "Start a multiplayer trivia session in the current channel. Questions are drawn from your enabled categories (set with `.trivia_config`). The first person to type the correct answer wins the round. Regular users are limited to 10 rounds max. The winner earns 25 Coffee Beans per correct answer", "any"),
+            ("`.trivia_config`", "Open an interactive dropdown menu to choose which trivia categories appear in your games", "any"),
+            ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.obliterate`\n**Affectionate:** `.kiss` `.smooch` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill`\n**Reactions:** `.stare` `.shocked`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode`", "any")
         ]
     },
     "Economy": {
-        "description": "Work shifts, earn beans, and tip friends.",
+        "description": "Work shifts, earn Coffee Beans, and tip friends.",
         "emoji": "☕",
         "commands": [
-            ("`.shift`", "Work a shift to earn Coffee Beans", "any"),
-            ("`.beans`", "Check your bean balance", "any"),
-            ("`.tip <@user> <amount>`", "Send beans to another user", "any"),
-            ("`.bean_top`", "Lists the richest users", "any"),
-            ("`.daily`", "Get your daily reward!", "any")
+            ("`.shift`", "Work a shift at the cafe to earn between 10–50 Coffee Beans. Has a 30-minute cooldown between uses", "any"),
+            ("`.beans`", "Check your current Coffee Bean balance", "any"),
+            ("`.tip <@user> <amount>`", "Send some of your Coffee Beans to another user. You cannot tip yourself or bots, and you must have enough beans to cover the amount", "any"),
+            ("`.bean_top`", "See the top 10 richest users in the server by Coffee Bean balance", "any"),
+            ("`.daily`", "Claim your daily Coffee Bean reward (base: 100 beans). Your streak grows by 1 each consecutive day you claim, adding +2% to your reward per streak day. Missing more than 48 hours resets your streak. 24-hour cooldown", "any")
         ]
     },
     "Faith": {
-        "description": "send testimonies, get Bible verses, and more! (WIP)",
+        "description": "Send testimonies, get Bible verses, and more! (WIP)",
         "emoji": "✝️",
         "commands": [
-            ("`.send_anonymous_testimony`", "Sends your testimony anonymously into the testimonies chat", "any")
+            ("`.send_anonymous_testimony <message>`", "Send a testimony to the server's testimony channel with no name attached. **Must be used in DMs with the bot.** The bot will show you a preview and ask you to confirm before sending", "any"),
+            ("`.verse`", "Display a random Bible verse from the database", "any")
         ]
     },
     "Admin": {
         "description": "Bot configuration and database management.",
         "emoji": "⚙️",
         "commands": [
-            ("`.add_gif <type> <link>`", "Adds a new GIF", "bot_admin"),
-            ("`.remove_gif <type> <link>`", "Removes a GIF", "bot_admin"),
-            ("`.add_quote <author> <quote>`", "Adds a new quote", "bot_admin"),
-            ("`.remove_quote <quote>`", "Removes a quote", "bot_admin"),
-            ("`.add_eight_ball <response>`", "Add an 8-ball response", "bot_admin"),
-            ("`.remove_eight_ball <response>`", "Remove an 8-ball response", "bot_admin")
+            ("`.add_gif <type> <link>`", "Add a new GIF URL to a specific emote category (e.g. `punch`, `hug`)", "bot_admin"),
+            ("`.remove_gif <type> <link>`", "Remove a GIF URL from an emote category by its exact link", "bot_admin"),
+            ("`.add_quote <author> <quote>`", "Add a new quote to the database under the given author name", "bot_admin"),
+            ("`.remove_quote <quote>`", "Remove a quote from the database by its exact text content", "bot_admin"),
+            ("`.add_eight_ball <response>`", "Add a new response to the Magic 8-Ball's answer pool", "bot_admin"),
+            ("`.remove_eight_ball <response>`", "Remove a response from the Magic 8-Ball's answer pool by its exact text", "bot_admin"),
+            ("`.add_verse <version> <reference> <verse_text>`", "Add a Bible verse to the database. Wrap multi-word fields in quotes (e.g. `.add_verse NIV \"John 3:16\" For God so loved...`)", "bot_admin"),
+            ("`.remove_verse <version> <reference>`", "Remove a Bible verse by its translation version and reference (e.g. `.remove_verse NIV John 3:16`)", "bot_admin"),
+            ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin")
         ]
     }
 }
@@ -611,22 +619,63 @@ async def daily(ctx):
 async def send_anonymous_testimony(ctx, *, message: str):
     await FaithModule.send_testimony(ctx, message)
 
+
 @bot.command()
 @is_authorized("any")
 async def verse(ctx):
     await FaithModule.random_verse(ctx)
 
-@bot.command()
-@is_authorized("bot_admin")
-async def add_verse(ctx, reference: str, *, verse_text: str):
-    # We use '*' for verse_text so it captures the whole sentence
-    # Usage: .add_verse "John 3:16" For God so loved...
-    await BotAdminModule.add_verse(ctx, reference, verse_text)
 
 @bot.command()
 @is_authorized("bot_admin")
-async def remove_verse(ctx, *, reference: str):
-    await BotAdminModule.remove_verse(ctx, reference)
+async def add_verse(ctx, version: str, reference: str, *, verse_text: str):
+    # Usage: .add_verse NIV "John 3:16" For God so loved...
+    await BotAdminModule.add_verse(ctx, reference, verse_text, version)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def remove_verse(ctx, version: str, *, reference: str):
+    await BotAdminModule.remove_verse(ctx, reference, version)
+
+
+@bot.command()
+@is_authorized("any")
+async def trivia(ctx, rounds: int):
+    """Starts a trivia session using the user's config."""
+    user_data = DataStorage.get_or_create_user(ctx.author.id)
+
+    # Check if the user is an Admin
+    is_admin = str(ctx.author.id) in DataStorage.administrators or ctx.author.guild_permissions.administrator
+
+    # Apply limits to non-admins
+    if not is_admin and rounds > 10:
+        await ctx.send("🚫 Regular users can only start games with up to 10 rounds!")
+        return
+
+    if rounds < 1:
+        await ctx.send("You need to play at least 1 round!")
+        return
+
+    await TriviaModule.start_session(ctx, rounds, user_data)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def add_trivia(ctx, category: str, sub_category: str, question: str, *, answers: str):
+    """
+    Usage: .add_trivia "category" "sub-category" "Question?" "answer 1, answer 2"
+    Use quotes around each section if they contain spaces!
+    """
+    await BotAdminModule.add_trivia(ctx, category, sub_category, question, answers)
+
+
+@bot.command()
+@is_authorized("any")
+async def trivia_config(ctx):
+    """Opens the trivia configuration menu."""
+    user_data = DataStorage.get_or_create_user(ctx.author.id)
+    await TriviaModule.open_config(ctx, user_data)
 
 
 @bot.event
