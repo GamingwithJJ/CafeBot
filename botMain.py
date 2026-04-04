@@ -9,6 +9,7 @@ import ModerationModule
 import BotAdminModule
 import FaithModule
 import TriviaModule
+import MusicModule
 
 from dotenv import dotenv_values
 
@@ -170,6 +171,15 @@ COMMAND_MODULES = {
         "commands": [
             ("`.send_anonymous_testimony <message>`", "Send a testimony to the server's testimony channel with no name attached. **Must be used in DMs with the bot.** The bot will show you a preview and ask you to confirm before sending", "any"),
             ("`.verse`", "Display a random Bible verse from the database", "any")
+        ]
+    },
+    "Music": {
+        "description": "Play music in voice channels from YouTube.",
+        "emoji": "🎵",
+        "commands": [
+            ("`.play <song name>`", "Search YouTube and add a song to the queue. Joins your voice channel if not already connected", "any"),
+            ("`.skip`", "Skip the currently playing song and move to the next in the queue", "any"),
+            ("`.leave`", "Clear the queue and disconnect the bot from the voice channel", "any")
         ]
     },
     "Admin": {
@@ -676,6 +686,29 @@ async def trivia_config(ctx):
     """Opens the trivia configuration menu."""
     user_data = DataStorage.get_or_create_user(ctx.author.id)
     await TriviaModule.open_config(ctx, user_data)
+
+
+# --- MUSIC COMMANDS ---
+
+@bot.command()
+@is_authorized("any")
+async def play(ctx, *, search: str):
+    """Searches YouTube and plays a song! Usage: .play <song name>"""
+    await MusicModule.play_song(ctx, search)
+
+
+@bot.command()
+@is_authorized("any")
+async def skip(ctx):
+    """Skips the currently playing song."""
+    await MusicModule.skip_song(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def leave(ctx):
+    """Clears the queue and makes the bot leave the voice channel."""
+    await MusicModule.leave_channel(ctx)
 
 
 @bot.event
