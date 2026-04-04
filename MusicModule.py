@@ -4,8 +4,24 @@ import shutil
 import yt_dlp
 import aiohttp
 import logging
+import os
 
 log = logging.getLogger("MusicModule")
+
+# ---------------------------------------------------------------------------
+# 0. PATH SETUP — add the bot's directory so yt-dlp can find a locally
+#    uploaded `node` binary for YouTube signature/challenge solving.
+# ---------------------------------------------------------------------------
+_bot_dir = os.path.dirname(os.path.abspath(__file__))
+os.environ['PATH'] = _bot_dir + os.pathsep + os.environ.get('PATH', '')
+log.info(f"Bot directory added to PATH: {_bot_dir}")
+
+# Quick check: can we find node?
+_node_path = shutil.which("node")
+if _node_path:
+    log.info(f"Found node at: {_node_path}")
+else:
+    log.warning("Node.js NOT found — YouTube signature solving will fail!")
 
 # ---------------------------------------------------------------------------
 # 1. FFMPEG BINARY — use the SYSTEM binary, not imageio_ffmpeg's stripped copy.
@@ -54,10 +70,11 @@ _COMMON_YTDL_OPTS = {
     'source_address': '0.0.0.0',
 
     # --- YouTube-specific defenses ---
-    # Use iOS client to avoid many bot blocks; falls back to web automatically
+    # 'ios' does NOT support cookies, so use 'web' + 'web_creator' instead.
+    # These require Node.js for signature solving + a cookies.txt for auth.
     'extractor_args': {
         'youtube': {
-            'player_client': ['ios', 'web_creator'],
+            'player_client': ['web', 'web_creator'],
         }
     },
     # Mimic a real browser
@@ -69,8 +86,9 @@ _COMMON_YTDL_OPTS = {
         ),
         'Accept-Language': 'en-US,en;q=0.9',
     },
-    # If you have a cookies.txt exported from your browser, uncomment:
-    # 'cookiefile': 'cookies.txt',
+    # Cookies exported from a browser where you're logged into YouTube.
+    # Place cookies.txt in the same directory as botMain.py.
+    'cookiefile': 'cookies.txt',
 }
 
 ytdl = yt_dlp.YoutubeDL(_COMMON_YTDL_OPTS)
@@ -164,6 +182,10 @@ async def _extract_song(search: str, loop) -> dict | None:
             data = data['entries'][0]
 
         url = data.get('url')
+        fmt = data.get('format', 'unknown')
+        proto = data.get('protocol', 'unknown')
+        log.info(f"SoundCloud picked format={fmt}, protocol={proto}")
+        log.info(f"SoundCloud stream URL (first 120 chars): {str(url)[:120]}")
         if url and await _validate_stream_url(url):
             return {'url': url, 'title': data.get('title', 'Unknown') + ' (SoundCloud)'}
     except Exception as e:
@@ -188,6 +210,8 @@ async def play_next(ctx):
 
     if not vc or not vc.is_connected():
         return
+
+    log.info(f"Sending to ffmpeg: {song['url'][:120]}...")
 
     audio_source = discord.FFmpegPCMAudio(
         song['url'],
