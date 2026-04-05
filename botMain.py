@@ -708,7 +708,7 @@ async def skip(ctx):
 @bot.command()
 @is_authorized("any")
 async def queue(ctx):
-    """Shows the current music queue."""
+    """Shows the currently playing song and upcoming queue."""
     await MusicModule.show_queue(ctx)
 
 

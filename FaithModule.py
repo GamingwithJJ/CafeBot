@@ -3,7 +3,7 @@ import asyncio
 import random
 import DataStorage
 
-TESTIMONY_CHANNEL_ID = 0
+TESTIMONY_CHANNEL_ID = 1490167539110510856
 
 
 async def send_testimony(ctx, user_message: str):

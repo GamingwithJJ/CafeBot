@@ -64,8 +64,8 @@ _COMMON_YTDL_OPTS = {
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
-    'quiet': False,           # ← let warnings through so we can debug
-    'no_warnings': False,
+    'quiet': True,
+    'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
 
@@ -75,11 +75,11 @@ _COMMON_YTDL_OPTS = {
     'js_runtimes': {'node': {}},
 
     # --- YouTube-specific defenses ---
-    # 'ios' does NOT support cookies, so use 'web' + 'web_creator' instead.
-    # These require Node.js for signature solving + a cookies.txt for auth.
+    # Use a single client to minimize JS challenge solving (the CPU-heavy part).
+    # 'web' alone is sufficient when cookies are provided.
     'extractor_args': {
         'youtube': {
-            'player_client': ['web', 'web_creator'],
+            'player_client': ['web'],
         }
     },
     # Mimic a real browser
@@ -109,9 +109,35 @@ ffmpeg_options = {
 
 
 # ---------------------------------------------------------------------------
-# 4. QUEUE MANAGEMENT
+# 4. QUEUE MANAGEMENT + URL CACHE
+#    YouTube stream URLs last ~6 hours. Caching them avoids re-running the
+#    expensive Node.js challenge solver for repeat plays.
 # ---------------------------------------------------------------------------
+import time
+
 music_queues = {}
+now_playing = {}          # guild_id → {'url', 'title'} of the active song
+_url_cache = {}           # key = search term, value = {'url', 'title', 'expires'}
+_CACHE_TTL = 4 * 3600     # 4 hours (conservative — URLs last ~6h)
+
+# Limit to 1 concurrent extraction so multiple .play commands don't
+# spawn parallel Node.js processes that spike the CPU to 100%.
+_extract_semaphore = asyncio.Semaphore(1)
+
+
+def _cache_get(search: str) -> dict | None:
+    """Return cached song info if still valid, else None."""
+    key = search.lower().strip()
+    entry = _url_cache.get(key)
+    if entry and entry['expires'] > time.time():
+        return {'url': entry['url'], 'title': entry['title']}
+    _url_cache.pop(key, None)
+    return None
+
+
+def _cache_set(search: str, url: str, title: str):
+    key = search.lower().strip()
+    _url_cache[key] = {'url': url, 'title': title, 'expires': time.time() + _CACHE_TTL}
 
 
 def get_queue(guild_id):
@@ -161,42 +187,56 @@ async def _extract_song(search: str, loop) -> dict | None:
     Returns {'url': ..., 'title': ...} or None on failure.
     """
 
-    # --- Attempt 1: normal search (usually hits YouTube) ---
-    try:
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(search, download=False)
-        )
-        if 'entries' in data:
-            data = data['entries'][0]
+    # --- Check cache first (instant, no CPU, no semaphore needed) ---
+    cached = _cache_get(search)
+    if cached:
+        log.info(f"Cache hit for: {search}")
+        return cached
 
-        url = data.get('url')
-        if url and await _validate_stream_url(url):
-            return {'url': url, 'title': data.get('title', 'Unknown')}
-        else:
-            log.warning("YouTube stream URL failed validation — trying SoundCloud fallback")
-    except Exception as e:
-        log.warning(f"YouTube extraction failed: {e}")
+    # --- Acquire semaphore so only 1 extraction runs at a time ---
+    async with _extract_semaphore:
 
-    # --- Attempt 2: SoundCloud fallback ---
-    try:
-        sc_search = f"scsearch:{search}"
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(sc_search, download=False)
-        )
-        if 'entries' in data:
-            data = data['entries'][0]
+        # Double-check cache — another request may have cached this while we waited
+        cached = _cache_get(search)
+        if cached:
+            return cached
 
-        url = data.get('url')
-        fmt = data.get('format', 'unknown')
-        proto = data.get('protocol', 'unknown')
-        log.info(f"SoundCloud picked format={fmt}, protocol={proto}")
-        log.info(f"SoundCloud stream URL (first 120 chars): {str(url)[:120]}")
-        if url and await _validate_stream_url(url):
-            return {'url': url, 'title': data.get('title', 'Unknown') + ' (SoundCloud)'}
-    except Exception as e:
-        log.warning(f"SoundCloud extraction also failed: {e}")
+        # --- Attempt 1: normal search (usually hits YouTube) ---
+        try:
+            data = await loop.run_in_executor(
+                None, lambda: ytdl.extract_info(search, download=False)
+            )
+            if 'entries' in data:
+                data = data['entries'][0]
 
-    return None
+            url = data.get('url')
+            if url and await _validate_stream_url(url):
+                result = {'url': url, 'title': data.get('title', 'Unknown')}
+                _cache_set(search, result['url'], result['title'])
+                return result
+            else:
+                log.warning("YouTube stream URL failed validation — trying SoundCloud fallback")
+        except Exception as e:
+            log.warning(f"YouTube extraction failed: {e}")
+
+        # --- Attempt 2: SoundCloud fallback ---
+        try:
+            sc_search = f"scsearch:{search}"
+            data = await loop.run_in_executor(
+                None, lambda: ytdl.extract_info(sc_search, download=False)
+            )
+            if 'entries' in data:
+                data = data['entries'][0]
+
+            url = data.get('url')
+            if url and await _validate_stream_url(url):
+                result = {'url': url, 'title': data.get('title', 'Unknown') + ' (SoundCloud)'}
+                _cache_set(search, result['url'], result['title'])
+                return result
+        except Exception as e:
+            log.warning(f"SoundCloud extraction also failed: {e}")
+
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +247,7 @@ async def play_next(ctx):
     queue = get_queue(ctx.guild.id)
 
     if not queue:
+        now_playing.pop(ctx.guild.id, None)
         await ctx.send("The queue is empty! Add more songs or I will take a break.")
         return
 
@@ -214,9 +255,11 @@ async def play_next(ctx):
     vc = ctx.voice_client
 
     if not vc or not vc.is_connected():
+        now_playing.pop(ctx.guild.id, None)
         return
 
-    log.info(f"Sending to ffmpeg: {song['url'][:120]}...")
+    # Track what's currently playing so it can be displayed
+    now_playing[ctx.guild.id] = song
 
     audio_source = discord.FFmpegPCMAudio(
         song['url'],
@@ -285,39 +328,37 @@ async def skip_song(ctx):
         await ctx.send("Nothing is playing right now.")
 
 
-async def show_queue(ctx):
-    queue = get_queue(ctx.guild.id)
-    vc = ctx.voice_client
-
-    if not queue and (not vc or not vc.is_playing()):
-        await ctx.send("The queue is empty!")
-        return
-
-    lines = []
-    if vc and vc.is_playing():
-        lines.append("**Now Playing:** (use `.skip` to skip)")
-
-    for i, song in enumerate(queue, start=1):
-        lines.append(f"`{i}.` {song['title']}")
-
-    if not lines:
-        await ctx.send("The queue is empty!")
-        return
-
-    embed = discord.Embed(
-        title="🎵 Music Queue",
-        description="\n".join(lines),
-        color=discord.Color.blurple()
-    )
-    embed.set_footer(text=f"{len(queue)} song(s) in queue")
-    await ctx.send(embed=embed)
-
-
 async def leave_channel(ctx):
     vc = ctx.voice_client
     if vc:
         music_queues.pop(ctx.guild.id, None)
+        now_playing.pop(ctx.guild.id, None)
         await vc.disconnect()
         await ctx.send("👋 Disconnected from voice. See ya!")
     else:
         await ctx.send("I'm not in a voice channel.")
+
+
+async def show_queue(ctx):
+    """Display the currently playing song and upcoming queue."""
+    current = now_playing.get(ctx.guild.id)
+    queue = get_queue(ctx.guild.id)
+
+    if not current and not queue:
+        await ctx.send("🎵 Nothing is playing and the queue is empty.")
+        return
+
+    lines = []
+    if current:
+        lines.append(f"🎶 **Now Playing:** {current['title']}")
+
+    if queue:
+        lines.append("\n📝 **Up Next:**")
+        for i, song in enumerate(queue[:10], 1):
+            lines.append(f"`{i}.` {song['title']}")
+        if len(queue) > 10:
+            lines.append(f"*...and {len(queue) - 10} more*")
+    elif current:
+        lines.append("\n📝 **Up Next:** Nothing queued.")
+
+    await ctx.send("\n".join(lines))
