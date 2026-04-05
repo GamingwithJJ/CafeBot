@@ -69,6 +69,11 @@ _COMMON_YTDL_OPTS = {
     'default_search': 'auto',
     'source_address': '0.0.0.0',
 
+    # --- JavaScript runtime ---
+    # Node.js is NOT enabled by default (only Deno is).
+    # Explicitly enable it; node is already on PATH.
+    'js_runtimes': {'node': {}},
+
     # --- YouTube-specific defenses ---
     # 'ios' does NOT support cookies, so use 'web' + 'web_creator' instead.
     # These require Node.js for signature solving + a cookies.txt for auth.
@@ -278,6 +283,34 @@ async def skip_song(ctx):
         await ctx.send("⏭️ Skipped!")
     else:
         await ctx.send("Nothing is playing right now.")
+
+
+async def show_queue(ctx):
+    queue = get_queue(ctx.guild.id)
+    vc = ctx.voice_client
+
+    if not queue and (not vc or not vc.is_playing()):
+        await ctx.send("The queue is empty!")
+        return
+
+    lines = []
+    if vc and vc.is_playing():
+        lines.append("**Now Playing:** (use `.skip` to skip)")
+
+    for i, song in enumerate(queue, start=1):
+        lines.append(f"`{i}.` {song['title']}")
+
+    if not lines:
+        await ctx.send("The queue is empty!")
+        return
+
+    embed = discord.Embed(
+        title="🎵 Music Queue",
+        description="\n".join(lines),
+        color=discord.Color.blurple()
+    )
+    embed.set_footer(text=f"{len(queue)} song(s) in queue")
+    await ctx.send(embed=embed)
 
 
 async def leave_channel(ctx):

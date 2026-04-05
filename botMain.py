@@ -179,6 +179,7 @@ COMMAND_MODULES = {
         "commands": [
             ("`.play <song name>`", "Search YouTube and add a song to the queue. Joins your voice channel if not already connected", "any"),
             ("`.skip`", "Skip the currently playing song and move to the next in the queue", "any"),
+            ("`.queue`", "Show the current music queue", "any"),
             ("`.leave`", "Clear the queue and disconnect the bot from the voice channel", "any")
         ]
     },
@@ -706,6 +707,13 @@ async def skip(ctx):
 
 @bot.command()
 @is_authorized("any")
+async def queue(ctx):
+    """Shows the current music queue."""
+    await MusicModule.show_queue(ctx)
+
+
+@bot.command()
+@is_authorized("any")
 async def leave(ctx):
     """Clears the queue and makes the bot leave the voice channel."""
     await MusicModule.leave_channel(ctx)
@@ -725,6 +733,73 @@ async def host_check(ctx):
     )
 
     await ctx.send(f"🖥️ **Host Diagnostic Report:**\n```text\n{info}\n```")
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def debug_music(ctx):
+    """Check if node and cookies are set up correctly."""
+    import shutil
+    import os
+
+    bot_dir = os.path.dirname(os.path.abspath(__file__))
+    node_path = shutil.which("node")
+    cookies_exists = os.path.isfile(os.path.join(bot_dir, "cookies.txt"))
+    ffmpeg_path = shutil.which("ffmpeg")
+
+    # Check if 'node' file exists in bot dir even if not on PATH
+    local_node = os.path.join(bot_dir, "node")
+    local_node_exists = os.path.isfile(local_node)
+    local_node_executable = os.access(local_node, os.X_OK) if local_node_exists else False
+
+    # List files in bot dir that might be node-related
+    node_files = [f for f in os.listdir(bot_dir) if 'node' in f.lower()]
+
+    info = (
+        f"**Bot directory:** {bot_dir}\n"
+        f"**node on PATH:** {node_path or '❌ NOT FOUND'}\n"
+        f"**node file in bot dir:** {local_node_exists}\n"
+        f"**node is executable:** {local_node_executable}\n"
+        f"**Node-related files:** {node_files or 'None'}\n"
+        f"**cookies.txt exists:** {cookies_exists}\n"
+        f"**ffmpeg on PATH:** {ffmpeg_path or '❌ NOT FOUND'}\n"
+    )
+    await ctx.send(f"🔧 **Music Debug Report:**\n{info}")
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def debug_node(ctx):
+    """Test if node actually runs and check yt-dlp version."""
+    import subprocess
+    import yt_dlp
+
+    # Test node
+    try:
+        result = subprocess.run(
+            ["node", "--version"],
+            capture_output=True, text=True, timeout=5
+        )
+        node_info = f"✅ {result.stdout.strip()}" if result.returncode == 0 else f"❌ Exit code {result.returncode}: {result.stderr.strip()}"
+    except Exception as e:
+        node_info = f"❌ Failed to run: {e}"
+
+    # Test node can actually execute JS
+    try:
+        result = subprocess.run(
+            ["node", "-e", "console.log('ok')"],
+            capture_output=True, text=True, timeout=5
+        )
+        js_info = f"✅ {result.stdout.strip()}" if result.returncode == 0 else f"❌ Exit code {result.returncode}: {result.stderr.strip()}"
+    except Exception as e:
+        js_info = f"❌ {e}"
+
+    info = (
+        f"**Node version:** {node_info}\n"
+        f"**Node runs JS:** {js_info}\n"
+        f"**yt-dlp version:** {yt_dlp.version.__version__}\n"
+    )
+    await ctx.send(f"🔧 **Node & yt-dlp Debug:**\n{info}")
 
 
 @bot.event
