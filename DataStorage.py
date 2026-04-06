@@ -238,20 +238,13 @@ def load_all():
     else:
         magic_eight_ball = []
 
-    # Load verses
-    if os.path.exists(VERSES_FILE):
-        with open(VERSES_FILE, "r", encoding="utf-8") as f:
-            verses_data = json.load(f)
-            for verse_dict in verses_data:
-                verses.append(Verse(verse_dict["text"], verse_dict["reference"]))
-    else:
-        verses = []
-
     if os.path.exists(TRIVIA_QUESTIONS_FILE):
         with open(TRIVIA_QUESTIONS_FILE, "r", encoding="utf-8") as f:
             trivia_questions = json.load(f)
     else:
         trivia_questions = {}
+
+    load_bible_index()
 
     print(
         f"✅ Loaded {len(quotes)} quote authors, "
@@ -259,7 +252,6 @@ def load_all():
         f"{len(gifs)} gif categories, "
         f"{len(gif_messages)} message categories, "
         f"{len(magic_eight_ball)} eight ball responses, "
-        f"{len(verses)} verses, and "
         f"{len(trivia_questions)} trivia categories."
     )
 
