@@ -99,32 +99,6 @@ async def remove_eight_ball(ctx, response_to_remove: str):
     await ctx.send("Could not find specified response")
 
 
-async def add_verse(ctx, reference: str, verse_text: str, version: str):
-    """Adds a new Bible verse to the database"""
-    # Check if we already have it
-    for v in DataStorage.verses:
-        if v.get_reference().lower() == reference.lower() and v.get_version().lower() == version.lower():
-            await ctx.send(f"❌ You already have {reference} saved!")
-            return
-
-    new_verse = Verse(verse_text, reference, version)
-    DataStorage.verses.append(new_verse)
-    DataStorage.save_verses()
-
-    await ctx.send(f"✅ Successfully added **{reference}**!")
-
-
-async def remove_verse(ctx, reference: str, version: str):
-    """Removes a verse by its reference"""
-    for index, v in enumerate(DataStorage.verses):
-        if v.get_reference().lower() == reference.lower() and v.get_version().lower() == version.lower():
-            DataStorage.verses.pop(index)
-            DataStorage.save_verses()
-            await ctx.send(f"✅ Removed **{reference}**!")
-            return
-
-    await ctx.send("❌ Could not find a verse with that reference.")
-
 
 async def add_trivia(ctx, category: str, sub_category: str, question: str, answers: str):
     """

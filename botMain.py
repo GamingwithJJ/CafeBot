@@ -79,6 +79,9 @@ def check_cmd_permission(ctx, required_type):
     if str(ctx.author.id) in DataStorage.administrators:
         return True
 
+    if isinstance(ctx.channel, discord.DMChannel):
+        return True # Temporary fix, users will be able to see commands they normally cant
+
     if required_type == "any":
         return True
     elif required_type == "server_admin":
@@ -170,7 +173,10 @@ COMMAND_MODULES = {
         "emoji": "✝️",
         "commands": [
             ("`.send_anonymous_testimony <message>`", "Send a testimony to the server's testimony channel with no name attached. **Must be used in DMs with the bot.** The bot will show you a preview and ask you to confirm before sending", "any"),
-            ("`.verse`", "Display a random Bible verse from the database", "any")
+            ("`.random_verse [version]`", "Display a random Bible verse. Optionally specify a version (e.g. `ASV`) to pull from that translation only", "any"),
+            ("`.lookup_verse <version> <book> <chapter> <verse>`", "Look up a specific Bible verse by translation, book, chapter, and verse number (e.g. `.lookup_verse ASV John 3 16`)", "any"),
+            ("`.list_versions`", "List all Bible versions currently loaded", "any"),
+            ("`.verse_search <query>`", "Search the Bible index for verses containing a keyword or phrase. Prefix with `version:<VERSION>` to filter by translation (e.g. `.verse_search version:ASV love one another`)", "any")
         ]
     },
     "Music": {
@@ -193,8 +199,6 @@ COMMAND_MODULES = {
             ("`.remove_quote <quote>`", "Remove a quote from the database by its exact text content", "bot_admin"),
             ("`.add_eight_ball <response>`", "Add a new response to the Magic 8-Ball's answer pool", "bot_admin"),
             ("`.remove_eight_ball <response>`", "Remove a response from the Magic 8-Ball's answer pool by its exact text", "bot_admin"),
-            ("`.add_verse <version> <reference> <verse_text>`", "Add a Bible verse to the database. Wrap multi-word fields in quotes (e.g. `.add_verse NIV \"John 3:16\" For God so loved...`)", "bot_admin"),
-            ("`.remove_verse <version> <reference>`", "Remove a Bible verse by its translation version and reference (e.g. `.remove_verse NIV John 3:16`)", "bot_admin"),
             ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin")
         ]
     }
@@ -634,20 +638,37 @@ async def send_anonymous_testimony(ctx, *, message: str):
 @bot.command()
 @is_authorized("any")
 async def verse(ctx):
-    await FaithModule.random_verse(ctx)
+    await FaithModule.random_verse(ctx, None)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def add_verse(ctx, version: str, reference: str, *, verse_text: str):
-    # Usage: .add_verse NIV "John 3:16" For God so loved...
-    await BotAdminModule.add_verse(ctx, reference, verse_text, version)
+@is_authorized("any")
+async def random_verse(ctx, version: str = None):
+    await FaithModule.random_verse(ctx, version)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def remove_verse(ctx, version: str, *, reference: str):
-    await BotAdminModule.remove_verse(ctx, reference, version)
+@is_authorized("any")
+async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: str):
+    await FaithModule.lookup_verse(ctx, version, book, chapter, verse_num)
+
+
+@bot.command()
+@is_authorized("any")
+async def list_versions(ctx):
+   await FaithModule.list_versions(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def verse_search(ctx, *, query: str):
+    """
+    Search the Bible index for a keyword or phrase.
+    Optionally prefix with version:<VERSION> to filter.
+    Example: .verse_search love one another
+    Example: .verse_search version:NIV faith without works
+    """
+    await FaithModule.search_verses(ctx, query=query)
 
 
 @bot.command()

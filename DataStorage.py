@@ -19,9 +19,13 @@ MAGIC_EIGHT_BALL_FILE = "Saves/MagicEightBall.json"
 QUOTE_USERS_FILE = "Saves/QuoteUsers.json"
 VERSES_FILE = "Saves/verses.json"
 TRIVIA_QUESTIONS_FILE = "Saves/trivia_questions.json"
+BIBLE_INDEX_FILE = "Saves/bible_index.json"
 
 # Format: { "category_name": { "sub_category_name": [ ("Question", ["answer1", "answer2"]) ] } }
 trivia_questions = {}
+
+# Format:  {"version" : {"book" : {"chapter" : "verse" : ("VerseContent")}}}
+bible_index = {}
 
 verses = []
 
@@ -120,6 +124,16 @@ def save_verses():
         print(f"❌ Error saving verses: {e}")
 
 
+def save_bible_index():
+    """Saves the Bible index to JSON. Only needed if you mutate it at runtime."""
+    try:
+        with open(BIBLE_INDEX_FILE, "w", encoding="utf-8") as f:
+            json.dump(bible_index, f, indent=4, ensure_ascii=False)
+        print("✅ Bible index saved!")
+    except Exception as e:
+        print(f"❌ Error saving Bible index: {e}")
+
+
 def save_trivia_bank():
     """Saves the trivia dictionary to the JSON file."""
     try:
@@ -139,6 +153,42 @@ def save_all():
     save_quote_users()
     save_verses()
     save_trivia_bank()
+    save_bible_index()
+
+
+def load_bible_index():
+    """
+    Loads the Bible index from Saves/bible_index.json into memory.
+
+    Expected file format:
+    {
+        "KJV": {
+            "Genesis": {
+                "1": {
+                    "1": "In the beginning God created the heaven and the earth."
+                }
+            }
+        }
+    }
+    """
+    global bible_index
+    if os.path.exists(BIBLE_INDEX_FILE):
+        try:
+            with open(BIBLE_INDEX_FILE, "r", encoding="utf-8") as f:
+                bible_index = json.load(f)
+            total_verses = sum(
+                len(verses_dict)
+                for version_data in bible_index.values()
+                for book_data in version_data.values()
+                for verses_dict in book_data.values()
+            )
+            print(f"✅ Bible index loaded — {len(bible_index)} version(s), ~{total_verses:,} verses.")
+        except Exception as e:
+            print(f"❌ Error loading Bible index: {e}")
+            bible_index = {}
+    else:
+        bible_index = {}
+        print("⚠️  No Bible index file found at Saves/bible_index.json. Bible lookup commands will be unavailable.")
 
 
 def load_all():
