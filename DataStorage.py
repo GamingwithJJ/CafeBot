@@ -231,7 +231,6 @@ def load_all():
 
     print(
         f"✅ Loaded {len(quotes)} quote authors, "
-        f"{len(quote_users)} quote users, "
         f"{len(gifs)} gif categories, "
         f"{len(gif_messages)} message categories, "
         f"{len(magic_eight_ball)} eight ball responses, "
