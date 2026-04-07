@@ -16,7 +16,6 @@ QUOTES_FILE = "Saves/quotes.json"
 GIFS_FILE = "Saves/gifs.json"
 MESSAGES_FILE = "Saves/gif_messages.json"
 MAGIC_EIGHT_BALL_FILE = "Saves/MagicEightBall.json"
-QUOTE_USERS_FILE = "Saves/QuoteUsers.json"
 VERSES_FILE = "Saves/verses.json"
 TRIVIA_QUESTIONS_FILE = "Saves/trivia_questions.json"
 BIBLE_INDEX_FILE = "Saves/bible_index.json"
@@ -182,7 +181,7 @@ def load_bible_index():
 
 def load_all():
     """Loads all data from files. Returns defaults if files don't exist."""
-    global quotes, gifs, gif_messages, magic_eight_ball, quote_users, verses, trivia_questions
+    global quotes, gifs, gif_messages, magic_eight_ball, verses, trivia_questions
 
     # Load quotes
     quotes_data = {}

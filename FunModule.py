@@ -146,7 +146,7 @@ async def duel(ctx, target: discord.Member):
 
 async def quote(ctx):
 
-    list_of_users = DataStorage.quotes.keys()
+    list_of_users = list(DataStorage.quotes.keys())
 
     quotes_dictionary = DataStorage.quotes
     random_user_number = random.randint(0, len(list_of_users) - 1)
@@ -163,7 +163,7 @@ async def quotes(ctx, amount: int):
         await ctx.send("You can only list 5 quotes at a time.")
         return
 
-    quotes_users = DataStorage.quotes.keys()
+    quotes_users = list(DataStorage.quotes.keys())
 
     quotes_display = ""
     for number in range(0, amount):
