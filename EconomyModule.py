@@ -66,7 +66,7 @@ async def shift(ctx):
     await ctx.send(embed=embed)
 
 
-async def tip(ctx, target: discord.member, amount: float):
+async def tip(ctx, target: discord.Member, amount: float):
     """Sends a specified user some of your beans"""
     author = ctx.author
     author_id = author.id

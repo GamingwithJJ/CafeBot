@@ -5,6 +5,8 @@ import DataStorage
 
 TESTIMONY_CHANNEL_ID = 1490167539110510856
 
+last_random_verse = [] # contains a single verse format: version, book, chapter, verse
+
 
 async def send_testimony(ctx, user_message: str):
     """Sends a message which has to be dmed to the bot in a testimony channel."""
@@ -68,6 +70,9 @@ async def random_verse(ctx, version):
         verse_num = random.choice(list(verse_data.keys()))
         verse_text = verse_data[verse_num]
 
+        global last_random_verse
+        last_random_verse = [version_name, book_name, chapter_num, verse_num]
+
         embed = discord.Embed(
             title="📖 Random Verse",
             description=f'"{verse_text}"',
@@ -77,6 +82,46 @@ async def random_verse(ctx, version):
         await ctx.send(embed=embed)
     else:
         await ctx.send("Error, Bible index not found")
+
+
+async def verse_context(ctx):
+    """Shows up to 2 verses before and after the last randomly generated verse."""
+    if not last_random_verse:
+        await ctx.send("❌ No random verse has been generated yet. Use `.random_verse` first.")
+        return
+
+    version_name, book_name, chapter_num, verse_num = last_random_verse
+
+    version_data = DataStorage.bible_index.get(version_name)
+    if not version_data:
+        await ctx.send("❌ The version from the last verse is no longer available.")
+        return
+
+    chapter_data = version_data.get(book_name, {}).get(chapter_num, {})
+    if not chapter_data:
+        await ctx.send("❌ Could not find the chapter for the last verse.")
+        return
+
+    sorted_verse_keys = sorted(chapter_data.keys(), key=lambda x: int(x))
+    current_idx = sorted_verse_keys.index(verse_num)
+
+    start = max(0, current_idx - 2)
+    end = min(len(sorted_verse_keys) - 1, current_idx + 2)
+    context_keys = sorted_verse_keys[start:end + 1]
+
+    embed = discord.Embed(
+        title=f"📖 {book_name} {chapter_num} — Context",
+        color=discord.Color.gold()
+    )
+    for v in context_keys:
+        marker = "▶ " if v == verse_num else ""
+        embed.add_field(
+            name=f"{marker}{book_name} {chapter_num}:{v}",
+            value=f'"{chapter_data[v]}"',
+            inline=False
+        )
+    embed.set_footer(text=version_name)
+    await ctx.send(embed=embed)
 
 
 async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: str):

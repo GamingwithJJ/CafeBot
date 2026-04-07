@@ -147,6 +147,9 @@ async def duel(ctx, target: discord.Member):
 async def quote(ctx):
 
     list_of_users = list(DataStorage.quotes.keys())
+    if not list_of_users:
+        await ctx.send("No quotes have been added yet!")
+        return
 
     quotes_dictionary = DataStorage.quotes
     random_user_number = random.randint(0, len(list_of_users) - 1)
@@ -155,7 +158,12 @@ async def quote(ctx):
     random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
     random_quote = quotes_dictionary[random_user][random_quote_number]
 
-    await ctx.send(f"{str(random_quote)}")
+    embed = discord.Embed(
+        description=f'"{random_quote.get_text()}"',
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text=f"— {random_quote.get_author()}")
+    await ctx.send(embed=embed)
 
 
 async def quotes(ctx, amount: int):
@@ -164,8 +172,11 @@ async def quotes(ctx, amount: int):
         return
 
     quotes_users = list(DataStorage.quotes.keys())
+    if not quotes_users:
+        await ctx.send("No quotes have been added yet!")
+        return
 
-    quotes_display = ""
+    embed = discord.Embed(title="📖 Random Quotes", color=discord.Color.gold())
     for number in range(0, amount):
         quotes_dictionary = DataStorage.quotes
         random_user_number = random.randint(0, len(quotes_users) - 1)
@@ -173,26 +184,27 @@ async def quotes(ctx, amount: int):
 
         random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
         random_quote = quotes_dictionary[random_user][random_quote_number]
-        quotes_display += f"{str(random_quote)} \n"
-    await ctx.send(quotes_display)
+        embed.add_field(name=f"— {random_quote.get_author()}", value=f'"{random_quote.get_text()}"', inline=False)
+    await ctx.send(embed=embed)
 
 
 async def quote_list(ctx, user: str, number):
     """Sorts quotes by a individual and only shows quotes which are sent by a certain individual."""
     if number > 5:
         await ctx.send("You can only send five quotes at a time.")
+        return
 
     user = user.lower().capitalize()
     if user not in DataStorage.quotes.keys():
         await ctx.send(f"{user} user is not a recognized quote user")
+        return
 
-    quotes_display = ""
+    embed = discord.Embed(title=f"📖 Quotes from {user}", color=discord.Color.gold())
     for number in range(0, number):
         random_quote_number = random.randint(0, len(DataStorage.quotes[user]) - 1)
         random_quote = DataStorage.quotes[user][random_quote_number]
-        quotes_display += f"{str(random_quote)} \n"
-
-    await ctx.send(quotes_display)
+        embed.add_field(name=f"Quote #{number + 1}", value=f'"{random_quote.get_text()}"', inline=False)
+    await ctx.send(embed=embed)
 
 
 async def quote_count(ctx, user: str):
@@ -202,7 +214,11 @@ async def quote_count(ctx, user: str):
         await ctx.send(f"{user} is not a valid quoter")
         return
 
-    await ctx.send(f"{user} has made {len(DataStorage.quotes[user])} quotes!")
+    embed = discord.Embed(
+        description=f"**{user}** has **{len(DataStorage.quotes[user])}** quotes in the database.",
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
 
 
 async def quote_top(ctx):

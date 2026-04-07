@@ -174,6 +174,7 @@ COMMAND_MODULES = {
         "commands": [
             ("`.send_anonymous_testimony <message>`", "Send a testimony to the server's testimony channel with no name attached. **Must be used in DMs with the bot.** The bot will show you a preview and ask you to confirm before sending", "any"),
             ("`.random_verse [version]`", "Display a random Bible verse. Optionally specify a version (e.g. `ASV`) to pull from that translation only", "any"),
+            ("`.verse_context`", "Show the 2 verses before and after the last randomly generated verse (if they exist)", "any"),
             ("`.lookup_verse <version> <book> <chapter> <verse>`", "Look up a specific Bible verse by translation, book, chapter, and verse number (e.g. `.lookup_verse ASV John 3 16`)", "any"),
             ("`.list_versions`", "List all Bible versions currently loaded", "any"),
             ("`.verse_search <query>`", "Search the Bible index for verses containing a keyword or phrase. Prefix with `version:<VERSION>` to filter by translation (e.g. `.verse_search version:ASV love one another`)", "any")
@@ -349,7 +350,7 @@ async def roll_multiple(ctx, *,  dice_input):
 @bot.command()
 @is_authorized("any")
 async def create_character(ctx, dnd_class: str, name: str):
-    await DndModule.create_character(ctx, dnd_class, name)
+    await DndModule.create_character(ctx, name, dnd_class)
 
 
 @bot.command()
@@ -535,7 +536,7 @@ async def sleep(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def obliterate(ctx, target: discord.Member = None):
+async def purge(ctx, target: discord.Member = None):
     await FunModule.gif(ctx, "purge", target)
 
 
@@ -649,6 +650,12 @@ async def random_verse(ctx, version: str = None):
 
 @bot.command()
 @is_authorized("any")
+async def verse_context(ctx):
+    await FaithModule.verse_context(ctx)
+
+
+@bot.command()
+@is_authorized("any")
 async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: str):
     await FaithModule.lookup_verse(ctx, version, book, chapter, verse_num)
 
@@ -668,8 +675,8 @@ async def verse_search(ctx, max_results: int, *, query: str):
     Example: .verse_search love one another
     Example: .verse_search version:NIV faith without works
     """
-    if max_results > 5 and not is_authorized("server_admin"):
-        ctx.send("Sorry, You cannot do more than 5 results.")
+    if max_results > 5 and not check_cmd_permission(ctx, "server_admin"):
+        await ctx.send("Sorry, you cannot request more than 5 results.")
         return
     await FaithModule.search_verses(ctx, max_results, query=query)
 

@@ -61,7 +61,7 @@ async def roll_dice(ctx, dice_type_and_amount: str, modifier):
 
     output_string = f"Rolls for {amount}D{dice_type} were: {str(rolls_to_return)} total of all rolls is {total}"
     if modifier > 0:
-        output_string += f" plus your modifier is {total + modifier}"
+        output_string += f" plus your modifier is {total}"
     await ctx.send(output_string)
 
 

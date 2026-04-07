@@ -43,9 +43,7 @@ async def add_quote(ctx, authors, quote):
     if isinstance(authors, str):
         authors = [authors.lower().capitalize()]
     else:
-        author_overwrite_list = []
-        for author in authors:
-            author_overwrite_list.append(author.lower().capitalize())
+        authors = [author.lower().capitalize() for author in authors]
 
     # Filter for already exists
     for author in authors:
@@ -59,9 +57,6 @@ async def add_quote(ctx, authors, quote):
         quote_object = Quote(quote, author)
         if author not in quotes_dictionary:
             DataStorage.quotes[author] = []
-            if author not in DataStorage.quote_users:
-                DataStorage.quote_users.append(author)
-                DataStorage.save_quote_users()
         DataStorage.quotes[author].append(quote_object)
 
     DataStorage.save_quotes()
@@ -96,6 +91,7 @@ async def remove_eight_ball(ctx, response_to_remove: str):
             DataStorage.magic_eight_ball.pop(index)
             DataStorage.save_eight_ball()
             await ctx.send(f"✅Removed Response!")
+            return
     await ctx.send("Could not find specified response")
 
 
