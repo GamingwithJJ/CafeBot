@@ -157,20 +157,41 @@ async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: st
         await ctx.send(f"❌ **{book}** only has chapters 1–{max_ch} in **{version}**.")
         return
 
-    try:
-        verse_text = chapter_data[verse_num]
-    except KeyError:
-        max_v = max(chapter_data.keys(), key=lambda x: int(x))
-        await ctx.send(f"❌ **{book} {chapter}** only has verses 1–{max_v} in **{version}**.")
-        return
+    max_v = max(chapter_data.keys(), key=lambda x: int(x))
 
-    embed = discord.Embed(
-        title=f"📖 {book} {chapter}:{verse_num}",
-        description=f'"{verse_text}"',
-        color=discord.Color.gold()
-    )
-    embed.set_footer(text=version)
-    await ctx.send(embed=embed)
+    # --- Range (e.g. "3-8") ---
+    if "-" in verse_num:
+        start_str, end_str = verse_num.split("-", 1)
+        start, end = int(start_str), int(end_str)
+
+        if str(start) not in chapter_data or str(end) not in chapter_data:
+            await ctx.send(f"❌ **{book} {chapter}** only has verses 1–{max_v} in **{version}**.")
+            return
+
+        embed = discord.Embed(
+            title=f"📖 {book} {chapter}:{start}–{end}",
+            color=discord.Color.gold()
+        )
+        for v in range(start, end + 1):
+            verse_text = chapter_data.get(str(v))
+            if verse_text:
+                embed.add_field(name=f"Verse {v}", value=f'"{verse_text}"', inline=False)
+        embed.set_footer(text=version)
+        await ctx.send(embed=embed)
+
+    # --- Single verse ---
+    else:
+        if verse_num not in chapter_data:
+            await ctx.send(f"❌ **{book} {chapter}** only has verses 1–{max_v} in **{version}**.")
+            return
+
+        embed = discord.Embed(
+            title=f"📖 {book} {chapter}:{verse_num}",
+            description=f'"{chapter_data[verse_num]}"',
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text=version)
+        await ctx.send(embed=embed)
 
 
 async def list_versions(ctx):

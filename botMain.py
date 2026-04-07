@@ -175,7 +175,7 @@ COMMAND_MODULES = {
             ("`.send_anonymous_testimony <message>`", "Send a testimony to the server's testimony channel with no name attached. **Must be used in DMs with the bot.** The bot will show you a preview and ask you to confirm before sending", "any"),
             ("`.random_verse [version]`", "Display a random Bible verse. Optionally specify a version (e.g. `ASV`) to pull from that translation only", "any"),
             ("`.verse_context`", "Show the 2 verses before and after the last randomly generated verse (if they exist)", "any"),
-            ("`.lookup_verse <version> <book> <chapter> <verse>`", "Look up a specific Bible verse by translation, book, chapter, and verse number (e.g. `.lookup_verse ASV John 3 16`)", "any"),
+            ("`.lookup_verse <version> <book> <chapter> <verse>`", "Look up a Bible verse or range of verses (e.g. `.lookup_verse ASV John 3 16` or `.lookup_verse ASV John 3 14-18`). Non-admins are limited to 8 verses per range", "any"),
             ("`.list_versions`", "List all Bible versions currently loaded", "any"),
             ("`.verse_search <query>`", "Search the Bible index for verses containing a keyword or phrase. Prefix with `version:<VERSION>` to filter by translation (e.g. `.verse_search version:ASV love one another`)", "any")
         ]
@@ -186,6 +186,8 @@ COMMAND_MODULES = {
         "commands": [
             ("`.play <song name>`", "Search YouTube and add a song to the queue. Joins your voice channel if not already connected", "any"),
             ("`.skip`", "Skip the currently playing song and move to the next in the queue", "any"),
+            ("`.pause`", "Pause the current song. Use again to resume", "any"),
+            ("`.loop`", "Toggle loop mode — the current song will repeat until loop is turned off", "any"),
             ("`.queue`", "Show the current music queue", "any"),
             ("`.leave`", "Clear the queue and disconnect the bot from the voice channel", "any")
         ]
@@ -657,6 +659,16 @@ async def verse_context(ctx):
 @bot.command()
 @is_authorized("any")
 async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: str):
+    if "-" in verse_num:
+        try:
+            start, end = verse_num.split("-", 1)
+            count = int(end) - int(start) + 1
+            if count > 8 and not check_cmd_permission(ctx, "server_admin"):
+                await ctx.send("❌ Non-admins can only look up 8 verses at a time.")
+                return
+        except ValueError:
+            await ctx.send("❌ Invalid verse range. Use `<start>-<end>` (e.g. `.lookup_verse ASV John 3 14-18`).")
+            return
     await FaithModule.lookup_verse(ctx, version, book, chapter, verse_num)
 
 
@@ -741,6 +753,20 @@ async def skip(ctx):
 async def queue(ctx):
     """Shows the currently playing song and upcoming queue."""
     await MusicModule.show_queue(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def pause(ctx):
+    """Pauses or resumes the currently playing song."""
+    await MusicModule.pause_song(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def loop(ctx):
+    """Toggles looping for the current song."""
+    await MusicModule.toggle_loop(ctx)
 
 
 @bot.command()

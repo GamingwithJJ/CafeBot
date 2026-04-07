@@ -117,6 +117,7 @@ import time
 
 music_queues = {}
 now_playing = {}          # guild_id → {'url', 'title'} of the active song
+loop_enabled = {}         # guild_id → bool
 _url_cache = {}           # key = search term, value = {'url', 'title', 'expires'}
 _CACHE_TTL = 4 * 3600     # 4 hours (conservative — URLs last ~6h)
 
@@ -246,6 +247,10 @@ async def play_next(ctx):
     """Pops the next song from the queue and plays it."""
     queue = get_queue(ctx.guild.id)
 
+    # If loop is on, re-insert the just-finished song at the front of the queue
+    if loop_enabled.get(ctx.guild.id) and ctx.guild.id in now_playing:
+        queue.insert(0, now_playing[ctx.guild.id])
+
     if not queue:
         now_playing.pop(ctx.guild.id, None)
         await ctx.send("The queue is empty! Add more songs or I will take a break.")
@@ -328,11 +333,36 @@ async def skip_song(ctx):
         await ctx.send("Nothing is playing right now.")
 
 
+async def pause_song(ctx):
+    vc = ctx.voice_client
+    if not vc:
+        await ctx.send("I'm not in a voice channel.")
+        return
+    if vc.is_playing():
+        vc.pause()
+        await ctx.send("⏸️ Paused.")
+    elif vc.is_paused():
+        vc.resume()
+        await ctx.send("▶️ Resumed.")
+    else:
+        await ctx.send("Nothing is playing right now.")
+
+
+async def toggle_loop(ctx):
+    guild_id = ctx.guild.id
+    loop_enabled[guild_id] = not loop_enabled.get(guild_id, False)
+    if loop_enabled[guild_id]:
+        await ctx.send("🔁 Loop **enabled** — current song will repeat.")
+    else:
+        await ctx.send("➡️ Loop **disabled**.")
+
+
 async def leave_channel(ctx):
     vc = ctx.voice_client
     if vc:
         music_queues.pop(ctx.guild.id, None)
         now_playing.pop(ctx.guild.id, None)
+        loop_enabled.pop(ctx.guild.id, None)
         await vc.disconnect()
         await ctx.send("👋 Disconnected from voice. See ya!")
     else:
