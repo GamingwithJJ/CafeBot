@@ -661,14 +661,17 @@ async def list_versions(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def verse_search(ctx, *, query: str):
+async def verse_search(ctx, max_results: int, *, query: str):
     """
     Search the Bible index for a keyword or phrase.
     Optionally prefix with version:<VERSION> to filter.
     Example: .verse_search love one another
     Example: .verse_search version:NIV faith without works
     """
-    await FaithModule.search_verses(ctx, query=query)
+    if max_results > 5 and not is_authorized("server_admin"):
+        ctx.send("Sorry, You cannot do more than 5 results.")
+        return
+    await FaithModule.search_verses(ctx, max_results, query=query)
 
 
 @bot.command()

@@ -143,7 +143,7 @@ async def list_versions(ctx):
     await ctx.send(embed=embed)
 
 
-async def search_verses(ctx, *, query: str):
+async def search_verses(ctx, max_results: int, query: str):
     """
     Searches the Bible index for verses containing the query string.
     Optionally filter by version by prefixing with `version:<VERSION> `.
@@ -169,7 +169,7 @@ async def search_verses(ctx, *, query: str):
 
     query_lower = query.lower()
     results = []  # list of (version, book, chapter, verse_num, text)
-    MAX_RESULTS = 5
+    MAX_RESULTS = max_results
 
     for version_name, version_data in DataStorage.bible_index.items():
         if version_filter and version_name.upper() != version_filter:

@@ -146,9 +146,11 @@ async def duel(ctx, target: discord.Member):
 
 async def quote(ctx):
 
+    list_of_users = DataStorage.quotes.keys()
+
     quotes_dictionary = DataStorage.quotes
-    random_user_number = random.randint(0, len(DataStorage.quote_users) - 1)
-    random_user = DataStorage.quote_users[random_user_number]
+    random_user_number = random.randint(0, len(list_of_users) - 1)
+    random_user = list_of_users[random_user_number]
 
     random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
     random_quote = quotes_dictionary[random_user][random_quote_number]
@@ -161,11 +163,13 @@ async def quotes(ctx, amount: int):
         await ctx.send("You can only list 5 quotes at a time.")
         return
 
+    quotes_users = DataStorage.quotes.keys()
+
     quotes_display = ""
     for number in range(0, amount):
         quotes_dictionary = DataStorage.quotes
-        random_user_number = random.randint(0, len(DataStorage.quote_users) - 1)
-        random_user = DataStorage.quote_users[random_user_number]
+        random_user_number = random.randint(0, len(quotes_users) - 1)
+        random_user = quotes_users[random_user_number]
 
         random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
         random_quote = quotes_dictionary[random_user][random_quote_number]
@@ -179,7 +183,7 @@ async def quote_list(ctx, user: str, number):
         await ctx.send("You can only send five quotes at a time.")
 
     user = user.lower().capitalize()
-    if user not in DataStorage.quote_users:
+    if user not in DataStorage.quotes.keys():
         await ctx.send(f"{user} user is not a recognized quote user")
 
     quotes_display = ""
@@ -194,7 +198,7 @@ async def quote_list(ctx, user: str, number):
 async def quote_count(ctx, user: str):
     """Displays the quotes count of a certain user"""
     user = user.lower().capitalize()
-    if user not in DataStorage.quote_users:
+    if user not in DataStorage.quotes.keys():
         await ctx.send(f"{user} is not a valid quoter")
         return
 
@@ -203,7 +207,7 @@ async def quote_count(ctx, user: str):
 
 async def quote_top(ctx):
     """Displays the top ten quoters"""
-    quoters = DataStorage.quote_users
+    quoters = DataStorage.quotes.keys()
     quotes = DataStorage.quotes
 
     quote_amounts = [] # List which stores the amount of quotes for each quoter and the name of the quoter in a tuple

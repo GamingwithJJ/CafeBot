@@ -34,7 +34,7 @@ administrators = []
 
 magic_eight_ball = []
 
-quote_users = []
+#quote_users = []
 # Users who are valid quote users
 
 #quotes = []
@@ -66,16 +66,6 @@ def save_eight_ball():
         print("✅Eight ball responses saved!")
     except Exception as e:
         print(f"❌ Error saving eight ball responses: {e}")
-
-
-def save_quote_users():
-    """Saves quote_users to JSON file"""
-    try:
-        with open(QUOTE_USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(quote_users, f, indent=4)
-        print("✅ Quote users saved!")
-    except Exception as e:
-        print(f"Error saving quote users!")
 
 
 def save_quotes():
@@ -150,7 +140,6 @@ def save_all():
     save_gifs()
     save_gif_messages()
     save_eight_ball()
-    save_quote_users()
     save_verses()
     save_trivia_bank()
     save_bible_index()
@@ -211,12 +200,6 @@ def load_all():
             quote_object.set_tags(quote_dict.get('tags', []))
             quotes[quoter].append(quote_object)
 
-    # Load quote users
-    if os.path.exists(QUOTE_USERS_FILE):
-        with open(QUOTE_USERS_FILE, "r") as f:
-            quote_users = json.load(f)
-    else:
-        quote_users = []
 
     # Load gifs
     if os.path.exists(GIFS_FILE):
