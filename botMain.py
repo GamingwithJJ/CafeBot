@@ -277,7 +277,7 @@ async def ping(ctx):
 
 @bot.command()
 @is_authorized("server_admin")
-async def purge(ctx, amount: int):
+async def m_purge(ctx, amount: int):
     await ModerationModule.purge(ctx, amount)
 
 
