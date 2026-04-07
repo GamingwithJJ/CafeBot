@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from typing import Optional
 import DataStorage
 
 import DndModule
@@ -12,6 +13,40 @@ import TriviaModule
 import MusicModule
 
 from dotenv import dotenv_values
+
+class InteractionContext:
+    """Adapter that wraps a discord.Interaction to behave like commands.Context.
+    Allows all module functions to be reused for slash commands unchanged."""
+
+    def __init__(self, interaction: discord.Interaction):
+        self._interaction = interaction
+        self._responded = False
+        self.bot = interaction.client
+        self.guild = interaction.guild
+        self.channel = interaction.channel
+        self.message = None
+
+    @property
+    def author(self):
+        # Return the full Member object in guild context so .voice, .guild_permissions, etc. are available
+        if self._interaction.guild:
+            member = self._interaction.guild.get_member(self._interaction.user.id)
+            if member:
+                return member
+        return self._interaction.user
+
+    async def defer(self, ephemeral: bool = False):
+        await self._interaction.response.defer(ephemeral=ephemeral)
+        self._responded = True
+
+    async def send(self, content=None, **kwargs):
+        if not self._responded:
+            self._responded = True
+            await self._interaction.response.send_message(content, **kwargs)
+            return await self._interaction.original_response()
+        else:
+            return await self._interaction.followup.send(content, **kwargs)
+
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -59,12 +94,46 @@ def is_authorized(required_type: str = "any"):
     return commands.check(predicate)
 
 
+async def is_authorized_interaction(interaction: discord.Interaction, required_type: str) -> bool:
+    if str(interaction.user.id) in DataStorage.administrators:
+        return True
+    if required_type == "any":
+        return True
+    if not interaction.guild:
+        return False
+    member = interaction.guild.get_member(interaction.user.id)
+    if not member:
+        return False
+    if required_type == "server_admin":
+        return member.guild_permissions.administrator
+    elif required_type == "moderator":
+        return member.guild_permissions.manage_messages
+    elif required_type == "kick":
+        return member.guild_permissions.kick_members
+    elif required_type == "ban":
+        return member.guild_permissions.ban_members
+    elif required_type == "mute":
+        return member.guild_permissions.moderate_members
+    elif required_type == "bot_admin":
+        return False
+    return False
+
+
+async def slash_auth_check(interaction: discord.Interaction, required_type: str) -> bool:
+    if not await is_authorized_interaction(interaction, required_type):
+        await interaction.response.send_message("🚫 You don't have permission to use this command.", ephemeral=True)
+        return False
+    return True
+
+
 # Events:
 @bot.event
 async def on_ready():
     DataStorage.load_user_data()
     DataStorage.load_all()
+    synced = await bot.tree.sync()
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
+    print(f'Synced {len(synced)} slash commands.')
     print('------')
 
 
@@ -896,5 +965,640 @@ async def on_command_error(ctx, error):
 
 config = dotenv_values(".env")
 token = config.get("token")
+
+
+# ===== SLASH COMMANDS =====
+
+# --- Misc ---
+
+@bot.tree.command(name="ping", description="Check if the bot is awake")
+async def slash_ping(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await ctx.send("Pong!")
+
+
+@bot.tree.command(name="help", description="Show all modules, or list commands in a specific module")
+async def slash_help(interaction: discord.Interaction, module: Optional[str] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    # Reuse the same help logic; check_cmd_permission works with InteractionContext
+    # because it only needs ctx.author (which the adapter provides)
+    if module is None:
+        embed = discord.Embed(
+            title="☕ CafeBot Modules",
+            description="Use `/help module:<module>` to see the commands inside it!",
+            color=discord.Color.gold()
+        )
+        for mod_name, mod_data in COMMAND_MODULES.items():
+            can_see_module = any(check_cmd_permission(ctx, req) for _, _, req in mod_data["commands"])
+            if can_see_module:
+                embed.add_field(name=f"{mod_data['emoji']} {mod_name}", value=mod_data["description"], inline=False)
+        embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+    else:
+        target_module = None
+        for mod_name in COMMAND_MODULES:
+            if mod_name.lower() == module.lower():
+                target_module = mod_name
+                break
+        if not target_module:
+            await ctx.send(f"❌ Could not find a module named `{module}`.")
+            return
+        mod_data = COMMAND_MODULES[target_module]
+        embed = discord.Embed(
+            title=f"{mod_data['emoji']} {target_module} Commands",
+            description=mod_data["description"],
+            color=discord.Color.gold()
+        )
+        visible_commands = 0
+        for cmd_usage, cmd_desc, req_permission in mod_data["commands"]:
+            if check_cmd_permission(ctx, req_permission):
+                embed.add_field(name=cmd_usage, value=cmd_desc, inline=False)
+                visible_commands += 1
+        if visible_commands == 0:
+            await ctx.send("🚫 You do not have permission to view commands in this module.")
+            return
+        embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+
+
+# --- Moderation ---
+
+@bot.tree.command(name="m_purge", description="Delete the last N messages in this channel")
+async def slash_m_purge(interaction: discord.Interaction, amount: int):
+    if not await slash_auth_check(interaction, "server_admin"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.purge(ctx, amount)
+
+
+@bot.tree.command(name="lockdown", description="Lock or unlock the current channel")
+async def slash_lockdown(interaction: discord.Interaction, state: bool = True, all_channels: bool = False):
+    if not await slash_auth_check(interaction, "server_admin"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.lockdown(ctx, state, all_channels)
+
+
+@bot.tree.command(name="slowmode", description="Set a per-message cooldown in this channel")
+async def slash_slowmode(interaction: discord.Interaction, boolean: bool = True, seconds: int = 500):
+    if not await slash_auth_check(interaction, "server_admin"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.slowmode(ctx, boolean, seconds)
+
+
+@bot.tree.command(name="kick", description="Kick a member from the server")
+async def slash_kick(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason provided"):
+    if not await slash_auth_check(interaction, "kick"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.kick_user(ctx, member, reason)
+
+
+@bot.tree.command(name="ban", description="Permanently ban a member from the server")
+async def slash_ban(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason provided"):
+    if not await slash_auth_check(interaction, "ban"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.ban_user(ctx, member, reason)
+
+
+@bot.tree.command(name="softban", description="Ban then immediately unban a member to wipe their recent messages")
+async def slash_softban(interaction: discord.Interaction, member: discord.Member, amount_of_days: int = 1, reason: str = "No reason given"):
+    if not await slash_auth_check(interaction, "server_admin"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.softban_user(ctx, member, amount_of_days, reason)
+
+
+@bot.tree.command(name="unban", description="Unban a user by their Discord user ID")
+async def slash_unban(interaction: discord.Interaction, user_id: str):
+    if not await slash_auth_check(interaction, "ban"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.unban_user(ctx, int(user_id))
+
+
+@bot.tree.command(name="mute", description="Put a user in Discord timeout")
+async def slash_mute(interaction: discord.Interaction, member: discord.Member, minutes: int = 10, reason: str = "No reason given"):
+    if not await slash_auth_check(interaction, "server_admin"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.timeout_user(ctx, member, minutes, reason)
+
+
+@bot.tree.command(name="unmute", description="Remove an active timeout from a user")
+async def slash_unmute(interaction: discord.Interaction, member: discord.Member):
+    if not await slash_auth_check(interaction, "server_admin"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.remove_timeout(ctx, member)
+
+
+@bot.tree.command(name="whois", description="View a detailed profile of a server member")
+async def slash_whois(interaction: discord.Interaction, member: discord.Member):
+    if not await slash_auth_check(interaction, "server_admin"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.whois(ctx, member)
+
+
+# --- DnD ---
+
+@bot.tree.command(name="roll", description="Roll dice using standard notation (e.g. 2d20, 1d6)")
+async def slash_roll(interaction: discord.Interaction, dice_type_and_amount: str, modifier: int = 0):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await DndModule.roll_dice(ctx, dice_type_and_amount, modifier)
+
+
+@bot.tree.command(name="roll_multiple", description="Roll multiple sets of dice separated by commas (e.g. 2d20 3, 1d8)")
+async def slash_roll_multiple(interaction: discord.Interaction, dice_input: str):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await DndModule.roll_multiple(ctx, dice_input)
+
+
+@bot.tree.command(name="create_character", description="Create and save a new D&D character")
+async def slash_create_character(interaction: discord.Interaction, dnd_class: str, name: str):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await DndModule.create_character(ctx, name, dnd_class)
+
+
+@bot.tree.command(name="view_characters", description="List all your saved D&D characters")
+async def slash_view_characters(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await DndModule.view_characters(ctx)
+
+
+# --- Fun ---
+
+@bot.tree.command(name="marry", description="Send a marriage proposal to another user")
+async def slash_marry(interaction: discord.Interaction, target_user: discord.Member):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.marry(ctx, target_user)
+
+
+@bot.tree.command(name="divorce", description="End your current marriage")
+async def slash_divorce(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.divorce(ctx)
+
+
+@bot.tree.command(name="partner", description="View your marriage certificate")
+async def slash_partner(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.partner(ctx)
+
+
+@bot.tree.command(name="marriage_top", description="See the top 10 longest-running marriages")
+async def slash_marriage_top(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.marriage_top(ctx)
+
+
+@bot.tree.command(name="duel", description="Start a turn-based duel against another user")
+async def slash_duel(interaction: discord.Interaction, target: discord.Member):
+    if not await slash_auth_check(interaction, "any"): return
+    # Defer so all ctx.send() calls (including the one that is .edit()'d) go through followup
+    await interaction.response.defer()
+    ctx = InteractionContext(interaction)
+    await FunModule.duel(ctx, target)
+
+
+@bot.tree.command(name="quote", description="Display a random quote from the database")
+async def slash_quote(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.quote(ctx)
+
+
+@bot.tree.command(name="quotes", description="Display multiple random quotes at once (max 5)")
+async def slash_quotes(interaction: discord.Interaction, amount: int):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.quotes(ctx, amount)
+
+
+@bot.tree.command(name="quote_list", description="Display random quotes from a specific person")
+async def slash_quote_list(interaction: discord.Interaction, user: str, amount: int = 1):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.quote_list(ctx, user, amount)
+
+
+@bot.tree.command(name="quote_count", description="Check how many quotes a specific person has saved")
+async def slash_quote_count(interaction: discord.Interaction, user: str):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.quote_count(ctx, user)
+
+
+@bot.tree.command(name="quote_top", description="See the top 10 people with the most quotes")
+async def slash_quote_top(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.quote_top(ctx)
+
+
+@bot.tree.command(name="eight_ball", description="Consult the Magic 8-Ball with a yes/no question")
+async def slash_eight_ball(interaction: discord.Interaction, question: str = "No question asked"):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.magic_eight_ball(ctx, question)
+
+
+@bot.tree.command(name="coinflip", description="Flip a coin and get Heads or Tails")
+async def slash_coinflip(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.coinflip(ctx)
+
+
+@bot.tree.command(name="trivia", description="Start a multiplayer trivia session in this channel")
+async def slash_trivia(interaction: discord.Interaction, rounds: int):
+    if not await slash_auth_check(interaction, "any"): return
+    user_data = DataStorage.get_or_create_user(interaction.user.id)
+    is_admin = str(interaction.user.id) in DataStorage.administrators or (
+        interaction.guild and interaction.guild.get_member(interaction.user.id) and
+        interaction.guild.get_member(interaction.user.id).guild_permissions.administrator
+    )
+    if not is_admin and rounds > 10:
+        await interaction.response.send_message("🚫 Regular users can only start games with up to 10 rounds!", ephemeral=True)
+        return
+    if rounds < 1:
+        await interaction.response.send_message("You need to play at least 1 round!", ephemeral=True)
+        return
+    # Defer so all trivia messages route through followup
+    await interaction.response.defer()
+    ctx = InteractionContext(interaction)
+    await TriviaModule.start_session(ctx, rounds, user_data)
+
+
+@bot.tree.command(name="trivia_config", description="Choose which trivia categories appear in your games")
+async def slash_trivia_config(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    user_data = DataStorage.get_or_create_user(interaction.user.id)
+    ctx = InteractionContext(interaction)
+    await TriviaModule.open_config(ctx, user_data)
+
+
+# --- Emotes ---
+
+@bot.tree.command(name="punch", description="Punch someone!")
+async def slash_punch(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "punch", target)
+
+
+@bot.tree.command(name="slap", description="Slap someone!")
+async def slash_slap(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "slap", target)
+
+
+@bot.tree.command(name="bonk", description="Bonk someone!")
+async def slash_bonk(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "bonk", target)
+
+
+@bot.tree.command(name="bite", description="Bite someone!")
+async def slash_bite(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "bite", target)
+
+
+@bot.tree.command(name="kill", description="Kill someone!")
+async def slash_kill(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "kill", target)
+
+
+@bot.tree.command(name="kiss", description="Kiss someone!")
+async def slash_kiss(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "kiss", target)
+
+
+@bot.tree.command(name="smooch", description="Smooch someone!")
+async def slash_smooch(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "kiss", target)
+
+
+@bot.tree.command(name="hug", description="Hug someone!")
+async def slash_hug(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "hug", target)
+
+
+@bot.tree.command(name="cuddle", description="Cuddle someone!")
+async def slash_cuddle(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "cuddle", target)
+
+
+@bot.tree.command(name="pat", description="Pat someone!")
+async def slash_pat(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "pat", target)
+
+
+@bot.tree.command(name="tickle", description="Tickle someone!")
+async def slash_tickle(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "tickle", target)
+
+
+@bot.tree.command(name="wave", description="Wave at someone!")
+async def slash_wave(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "wave", target)
+
+
+@bot.tree.command(name="cheer", description="Cheer for someone!")
+async def slash_cheer(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "cheer", target)
+
+
+@bot.tree.command(name="spill", description="Spill the tea!")
+async def slash_spill(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "spill", target)
+
+
+@bot.tree.command(name="stare", description="Stare at someone!")
+async def slash_stare(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "stare", target)
+
+
+@bot.tree.command(name="happy", description="Express happiness!")
+async def slash_happy(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "happy")
+
+
+@bot.tree.command(name="cry", description="Have a cry")
+async def slash_cry(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "cry")
+
+
+@bot.tree.command(name="sip", description="Take a sip")
+async def slash_sip(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "sip")
+
+
+@bot.tree.command(name="shocked", description="Express shock")
+async def slash_shocked(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "shocked")
+
+
+@bot.tree.command(name="explode", description="Explode!")
+async def slash_explode(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "explode")
+
+
+@bot.tree.command(name="sleep", description="Go to sleep")
+async def slash_sleep(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "sleep")
+
+
+@bot.tree.command(name="purge", description="Purge someone!")
+async def slash_purge(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "purge", target)
+
+
+# --- Economy ---
+
+@bot.tree.command(name="shift", description="Work a shift at the cafe to earn Coffee Beans")
+async def slash_shift(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.shift(ctx)
+
+
+@bot.tree.command(name="beans", description="Check your current Coffee Bean balance")
+async def slash_beans(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.beans(ctx)
+
+
+@bot.tree.command(name="tip", description="Send some of your Coffee Beans to another user")
+async def slash_tip(interaction: discord.Interaction, target: discord.Member, amount: float):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.tip(ctx, target, amount)
+
+
+@bot.tree.command(name="bean_top", description="See the top 10 richest users by Coffee Bean balance")
+async def slash_bean_top(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.bean_top(ctx)
+
+
+@bot.tree.command(name="daily", description="Claim your daily Coffee Bean reward")
+async def slash_daily(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.daily(ctx)
+
+
+# --- Faith ---
+
+@bot.tree.command(name="send_anonymous_testimony", description="Send a testimony anonymously (use in DMs with the bot)")
+async def slash_send_anonymous_testimony(interaction: discord.Interaction, message: str):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FaithModule.send_testimony(ctx, message)
+
+
+@bot.tree.command(name="random_verse", description="Display a random Bible verse")
+async def slash_random_verse(interaction: discord.Interaction, version: Optional[str] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FaithModule.random_verse(ctx, version)
+
+
+@bot.tree.command(name="verse_context", description="Show the 2 verses before and after the last random verse")
+async def slash_verse_context(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FaithModule.verse_context(ctx)
+
+
+@bot.tree.command(name="lookup_verse", description="Look up a Bible verse or range (e.g. ASV John 3 16 or ASV John 3 14-18)")
+async def slash_lookup_verse(interaction: discord.Interaction, version: str, book: str, chapter: str, verse_num: str):
+    if not await slash_auth_check(interaction, "any"): return
+    if "-" in verse_num:
+        try:
+            start, end = verse_num.split("-", 1)
+            count = int(end) - int(start) + 1
+            if count > 8 and not await is_authorized_interaction(interaction, "server_admin"):
+                await interaction.response.send_message("❌ Non-admins can only look up 8 verses at a time.", ephemeral=True)
+                return
+        except ValueError:
+            await interaction.response.send_message("❌ Invalid verse range. Use `<start>-<end>` (e.g. `14-18`).", ephemeral=True)
+            return
+    ctx = InteractionContext(interaction)
+    await FaithModule.lookup_verse(ctx, version, book, chapter, verse_num)
+
+
+@bot.tree.command(name="list_versions", description="List all Bible versions currently loaded")
+async def slash_list_versions(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FaithModule.list_versions(ctx)
+
+
+@bot.tree.command(name="verse_search", description="Search the Bible for verses containing a keyword or phrase")
+async def slash_verse_search(interaction: discord.Interaction, max_results: int, query: str):
+    if not await slash_auth_check(interaction, "any"): return
+    if max_results > 5 and not await is_authorized_interaction(interaction, "server_admin"):
+        await interaction.response.send_message("Sorry, you cannot request more than 5 results.", ephemeral=True)
+        return
+    ctx = InteractionContext(interaction)
+    await FaithModule.search_verses(ctx, max_results, query=query)
+
+
+# --- Music ---
+
+@bot.tree.command(name="play", description="Search YouTube and add a song to the queue")
+async def slash_play(interaction: discord.Interaction, search: str):
+    if not await slash_auth_check(interaction, "any"): return
+    await interaction.response.defer()
+    ctx = InteractionContext(interaction)
+    await MusicModule.play_song(ctx, search)
+
+
+@bot.tree.command(name="skip", description="Skip the currently playing song")
+async def slash_skip(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await MusicModule.skip_song(ctx)
+
+
+@bot.tree.command(name="queue", description="Show the current music queue")
+async def slash_queue(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await MusicModule.show_queue(ctx)
+
+
+@bot.tree.command(name="pause", description="Pause or resume the currently playing song")
+async def slash_pause(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await MusicModule.pause_song(ctx)
+
+
+@bot.tree.command(name="loop", description="Toggle loop mode for the current song")
+async def slash_loop(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await MusicModule.toggle_loop(ctx)
+
+
+@bot.tree.command(name="leave", description="Clear the queue and disconnect from the voice channel")
+async def slash_leave(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await MusicModule.leave_channel(ctx)
+
+
+# --- Admin ---
+
+@bot.tree.command(name="add_gif", description="Add a new GIF URL to a specific emote category")
+async def slash_add_gif(interaction: discord.Interaction, type: str, link: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.add_gif(ctx, type, link)
+
+
+@bot.tree.command(name="remove_gif", description="Remove a GIF URL from an emote category by its exact link")
+async def slash_remove_gif(interaction: discord.Interaction, type: str, link: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.remove_gif(ctx, type, link)
+
+
+@bot.tree.command(name="add_quote", description="Add a new quote to the database")
+async def slash_add_quote(interaction: discord.Interaction, authors: str, quote_input: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.add_quote(ctx, authors, quote_input)
+
+
+@bot.tree.command(name="remove_quote", description="Remove a quote from the database by its exact text")
+async def slash_remove_quote(interaction: discord.Interaction, quote_input: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.remove_quote(ctx, quote_input)
+
+
+@bot.tree.command(name="add_eight_ball", description="Add a new response to the Magic 8-Ball's answer pool")
+async def slash_add_eight_ball(interaction: discord.Interaction, response: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.add_eight_ball(ctx, response)
+
+
+@bot.tree.command(name="remove_eight_ball", description="Remove a response from the Magic 8-Ball's answer pool")
+async def slash_remove_eight_ball(interaction: discord.Interaction, response: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.remove_eight_ball(ctx, response)
+
+
+@bot.tree.command(name="add_trivia", description="Add a new question to the trivia bank")
+async def slash_add_trivia(interaction: discord.Interaction, category: str, sub_category: str, question: str, answers: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.add_trivia(ctx, category, sub_category, question, answers)
+
+
+@bot.tree.command(name="remove_trivia", description="Remove a question from the trivia bank by its exact text")
+async def slash_remove_trivia(interaction: discord.Interaction, category: str, sub_category: str, question: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.remove_trivia(ctx, category, sub_category, question)
+
+
+@bot.tree.command(name="admin_tip", description="Grant a user beans without requiring the admin to have funds")
+async def slash_admin_tip(interaction: discord.Interaction, target: discord.Member, amount: float):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.admin_tip(ctx, target, amount)
+
 
 bot.run(token)
