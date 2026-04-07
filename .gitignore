@@ -17,6 +17,10 @@ venv/
 Saves/quotes.json
 Saves/QuoteUsers.json
 Saves/UserSaves.json
+Saves/gif_messages.json
+Saves/gifs.json
+Saves/MagicEightBall.json
+Saves/trivia_questions.json
 
 #Windows files
 ffmpeg.exe

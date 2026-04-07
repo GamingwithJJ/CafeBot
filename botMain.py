@@ -202,7 +202,9 @@ COMMAND_MODULES = {
             ("`.remove_quote <quote>`", "Remove a quote from the database by its exact text content", "bot_admin"),
             ("`.add_eight_ball <response>`", "Add a new response to the Magic 8-Ball's answer pool", "bot_admin"),
             ("`.remove_eight_ball <response>`", "Remove a response from the Magic 8-Ball's answer pool by its exact text", "bot_admin"),
-            ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin")
+            ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin"),
+            ("`.remove_trivia <category> <sub_category> <question>`", "Remove a question from the trivia bank by its exact text. Wrap fields containing spaces in quotes.", "bot_admin"),
+            ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin")
         ]
     }
 }
@@ -722,6 +724,26 @@ async def add_trivia(ctx, category: str, sub_category: str, question: str, *, an
     Use quotes around each section if they contain spaces!
     """
     await BotAdminModule.add_trivia(ctx, category, sub_category, question, answers)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def remove_trivia(ctx, category: str, sub_category: str, *, question: str):
+    """
+    Usage: .remove_trivia "category" "sub-category" "Question?"
+    Use quotes around each section if they contain spaces!
+    """
+    await BotAdminModule.remove_trivia(ctx, category, sub_category, question)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def admin_tip(ctx, target: discord.Member, amount: float):
+    """
+    Usage: .admin_tip @user <amount>
+    Grants beans to a user without requiring the admin to have funds.
+    """
+    await BotAdminModule.admin_tip(ctx, target, amount)
 
 
 @bot.command()

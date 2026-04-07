@@ -1,4 +1,5 @@
 import DataStorage
+import discord
 from Classes.QuoteClass import Quote
 from Classes.Verse import Verse
 
@@ -95,7 +96,6 @@ async def remove_eight_ball(ctx, response_to_remove: str):
     await ctx.send("Could not find specified response")
 
 
-
 async def add_trivia(ctx, category: str, sub_category: str, question: str, answers: str):
     """
     Adds a new trivia question to the bank dynamically.
@@ -124,3 +124,48 @@ async def add_trivia(ctx, category: str, sub_category: str, question: str, answe
 
     await ctx.send(f"✅ Added new question to **{category.capitalize()} -> {sub_category.capitalize()}**!")
 
+
+async def remove_trivia(ctx, category: str, sub_category: str, question: str):
+    """
+    Removes a trivia question from the bank by matching the question text.
+    """
+    category = category.lower()
+    sub_category = sub_category.lower()
+
+    if category not in DataStorage.trivia_questions:
+        await ctx.send(f"Category **{category.capitalize()}** not found.")
+        return
+
+    if sub_category not in DataStorage.trivia_questions[category]:
+        await ctx.send(f"Sub-category **{sub_category.capitalize()}** not found in **{category.capitalize()}**.")
+        return
+
+    questions = DataStorage.trivia_questions[category][sub_category]
+    for index, entry in enumerate(questions):
+        if entry[0].lower() == question.lower():
+            questions.pop(index)
+            DataStorage.save_trivia_bank()
+            await ctx.send(f"✅ Removed question from **{category.capitalize()} -> {sub_category.capitalize()}**!")
+            return
+
+    await ctx.send("Could not find a question matching that text.")
+
+
+async def admin_tip(ctx, target: discord.Member, amount: float):
+    """Grants a user beans without requiring the admin to have funds."""
+    if amount <= 0:
+        await ctx.send("Amount must be greater than 0.")
+        return
+
+    target_data = DataStorage.get_or_create_user(target.id)
+    target_data.ajust_beans(amount)
+    DataStorage.save_user_data()
+
+    embed = discord.Embed(
+        title="💸 Admin Tip Sent!",
+        description=f"{ctx.author.mention} granted **{amount}** beans to {target.mention}!",
+        color=discord.Color.green()
+    )
+    embed.add_field(name=f"{target.display_name}'s New Balance", value=f"{target_data.get_beans()} beans")
+
+    await ctx.send(embed=embed)
