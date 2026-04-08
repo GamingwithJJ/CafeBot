@@ -115,6 +115,7 @@ async def start_session(ctx, rounds: int, user_data):
                             f"✅ **{msg.author.display_name}** got it right! The answer was: {official_answer}")
 
                         scores[msg.author] = scores.get(msg.author, 0) + 1
+                        DataStorage.get_or_create_user(msg.author.id).trivia_correct += 1
                         break
 
             except asyncio.TimeoutError:
@@ -148,3 +149,69 @@ async def start_session(ctx, rounds: int, user_data):
 
         embed.set_footer(text=f"Awarded {reward_amount} Coffee Beans to the winner!")
         await ctx.send(embed=embed)
+
+
+async def quick_trivia(ctx, user_data, category: str = None):
+    """Single-question trivia — no session needed."""
+    available_questions = []
+
+    if category:
+        cat_lower = category.lower()
+        if cat_lower in DataStorage.trivia_questions:
+            for sub in DataStorage.trivia_questions[cat_lower].values():
+                available_questions.extend(sub)
+        else:
+            cats = ", ".join(DataStorage.trivia_questions.keys())
+            await ctx.send(f"❌ Category **{category}** not found. Available: `{cats}`")
+            return
+    else:
+        for cat in user_data.enabled_trivia_categories:
+            if cat in DataStorage.trivia_questions:
+                for sub in DataStorage.trivia_questions[cat].values():
+                    available_questions.extend(sub)
+
+    if not available_questions:
+        await ctx.send("⚠️ No questions available. Enable some categories with `.trivia_config` or specify a category.")
+        return
+
+    question_text, acceptable_answers = random.choice(available_questions)
+
+    embed = discord.Embed(
+        title="🧠 Quick Trivia!",
+        description=f"**{question_text}**",
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text="You have 15 seconds to answer! First correct answer wins 10 beans.")
+    await ctx.send(embed=embed)
+
+    def check(m):
+        return m.channel == ctx.channel and not m.author.bot
+
+    try:
+        while True:
+            msg = await ctx.bot.wait_for('message', timeout=15.0, check=check)
+            if any(answer in msg.content.lower() for answer in acceptable_answers):
+                official_answer = acceptable_answers[0].capitalize()
+                winner_data = DataStorage.get_or_create_user(msg.author.id)
+                winner_data.trivia_correct += 1
+                winner_data.ajust_beans(10)
+                DataStorage.save_user_data()
+                await ctx.send(f"✅ **{msg.author.display_name}** got it! The answer was: **{official_answer}**. +10 beans!")
+                return
+    except asyncio.TimeoutError:
+        official_answer = acceptable_answers[0].capitalize()
+        await ctx.send(f"⏳ Time's up! The answer was: **{official_answer}**")
+
+
+async def trivia_stats(ctx, user_data):
+    """Show a user's personal trivia statistics."""
+    embed = discord.Embed(
+        title=f"🧠 {ctx.author.display_name}'s Trivia Stats",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="✅ Correct Answers", value=str(user_data.trivia_correct), inline=True)
+    enabled = user_data.enabled_trivia_categories
+    cats_str = ", ".join(c.capitalize() for c in enabled) if enabled else "None configured"
+    embed.add_field(name="📂 Enabled Categories", value=cats_str, inline=False)
+    embed.set_footer(text="Use .trivia_config to change your categories")
+    await ctx.send(embed=embed)

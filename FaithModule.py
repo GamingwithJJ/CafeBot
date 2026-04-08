@@ -209,6 +209,80 @@ async def list_versions(ctx):
     await ctx.send(embed=embed)
 
 
+async def verse_compare(ctx, version1: str, version2: str, book: str, chapter: str, verse_num: str):
+    """Show the same verse in two translations side by side."""
+    if not DataStorage.bible_index:
+        await ctx.send("📖 The Bible index hasn't been loaded yet. Please contact a bot admin.")
+        return
+
+    v1 = version1.upper()
+    v2 = version2.upper()
+    book = book.lower().capitalize()
+
+    results = {}
+    for v in [v1, v2]:
+        if v not in DataStorage.bible_index:
+            available = ", ".join(DataStorage.bible_index.keys())
+            await ctx.send(f"❌ Version **{v}** not found. Available versions: `{available}`")
+            return
+        try:
+            text = DataStorage.bible_index[v][book][chapter][verse_num]
+            results[v] = text
+        except KeyError:
+            await ctx.send(f"❌ **{book} {chapter}:{verse_num}** not found in **{v}**.")
+            return
+
+    embed = discord.Embed(
+        title=f"📖 {book} {chapter}:{verse_num} — Side by Side",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name=v1, value=f'"{results[v1]}"', inline=False)
+    embed.add_field(name=v2, value=f'"{results[v2]}"', inline=False)
+    await ctx.send(embed=embed)
+
+
+async def verse_bookmark(ctx):
+    """Bookmark the last randomly generated verse."""
+    if not last_random_verse:
+        await ctx.send("❌ No random verse has been generated yet. Use `.random_verse` first.")
+        return
+
+    version_name, book_name, chapter_num, verse_num = last_random_verse
+    user_data = DataStorage.get_or_create_user(ctx.author.id)
+    user_data.add_verse_bookmark(version_name, book_name, chapter_num, verse_num)
+    DataStorage.save_user_data()
+
+    await ctx.send(f"🔖 Bookmarked **{book_name} {chapter_num}:{verse_num}** ({version_name})!")
+
+
+async def verse_bookmarks(ctx):
+    """List all of the user's bookmarked verses."""
+    user_data = DataStorage.get_or_create_user(ctx.author.id)
+    bookmarks = user_data.get_verse_bookmarks()
+
+    if not bookmarks:
+        await ctx.send("📖 You have no bookmarked verses. Use `.verse_bookmark` after `.random_verse`!")
+        return
+
+    embed = discord.Embed(
+        title=f"🔖 {ctx.author.display_name}'s Bookmarked Verses",
+        color=discord.Color.gold()
+    )
+    for bm in bookmarks:
+        version, book, chapter, verse = bm
+        try:
+            text = DataStorage.bible_index[version][book][chapter][verse]
+        except KeyError:
+            text = "*(verse no longer available)*"
+        display_text = text if len(text) <= 200 else text[:197] + "..."
+        embed.add_field(
+            name=f"{book} {chapter}:{verse} ({version})",
+            value=f'"{display_text}"',
+            inline=False
+        )
+    await ctx.send(embed=embed)
+
+
 async def search_verses(ctx, max_results: int, query: str):
     """
     Searches the Bible index for verses containing the query string.

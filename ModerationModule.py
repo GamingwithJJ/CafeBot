@@ -1,5 +1,6 @@
 import datetime
 import discord
+import DataStorage
 
 async def purge(ctx, amount: int):
     if amount < 1:
@@ -100,6 +101,51 @@ async def softban_user(ctx, member, amount_of_days: int, reason):
     await ctx.guild.unban(member)
 
     await ctx.send(f"🌪️ **{member.name}** was softbanned (Messages wiped, but they can rejoin).")
+
+
+async def warn_user(ctx, member: discord.Member, reason: str):
+    """Log a warning against a server member."""
+    if member.id == ctx.author.id:
+        await ctx.send("You cannot warn yourself.")
+        return
+
+    user_data = DataStorage.get_or_create_user(member.id)
+    timestamp = datetime.datetime.now().isoformat(timespec="seconds")
+    user_data.add_warning(reason, str(ctx.author.id), timestamp)
+    DataStorage.save_user_data()
+
+    total = len(user_data.get_warnings())
+    embed = discord.Embed(
+        title="⚠️ Warning Issued",
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="User", value=member.mention, inline=True)
+    embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.set_footer(text=f"{member.display_name} now has {total} warning(s).")
+    await ctx.send(embed=embed)
+
+
+async def view_warnings(ctx, member: discord.Member):
+    """Display all logged warnings for a member."""
+    user_data = DataStorage.get_or_create_user(member.id)
+    warnings = user_data.get_warnings()
+
+    if not warnings:
+        await ctx.send(f"✅ **{member.display_name}** has no warnings on record.")
+        return
+
+    embed = discord.Embed(
+        title=f"⚠️ Warnings for {member.display_name}",
+        color=discord.Color.orange()
+    )
+    for i, w in enumerate(warnings, 1):
+        embed.add_field(
+            name=f"Warning #{i} — {w['timestamp']}",
+            value=f"**Reason:** {w['reason']}\n**Issued by:** <@{w['issued_by']}>",
+            inline=False
+        )
+    await ctx.send(embed=embed)
 
 
 async def whois(ctx, member):
