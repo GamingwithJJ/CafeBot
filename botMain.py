@@ -192,7 +192,9 @@ COMMAND_MODULES = {
             ("`.unban <user_id>`", "Unban a user by their Discord user ID (right-click → Copy ID with Developer Mode on)", "ban"),
             ("`.mute <user> [mins] [reason]`", "Put a user in Discord timeout for `[mins]` minutes (default: 10). They cannot send messages or speak in voice while timed out", "server_admin"),
             ("`.unmute <user>`", "Remove an active timeout from a user early", "server_admin"),
-            ("`.whois <user>`", "View a detailed profile of a server member: their ID, nickname, account creation date, server join date, and all their roles", "server_admin")
+            ("`.whois <user>`", "View a detailed profile of a server member: their ID, nickname, account creation date, server join date, and all their roles", "server_admin"),
+            ("`.warn <@user> [reason]`", "Log a formal warning against a server member", "moderator"),
+            ("`.warnings <@user>`", "View all logged warnings for a member", "moderator")
         ]
     },
     "DnD": {
@@ -202,7 +204,9 @@ COMMAND_MODULES = {
             ("`.roll <NdX> [modifier]`", "Roll dice using standard notation (e.g. `.roll 2d20`, `.roll 1d6 3`). Supported dice: d4, d6, d8, d10, d12, d20, d100. An optional modifier is added to the final total. Max 100 dice per roll", "any"),
             ("`.roll_multiple <input>`", "Roll multiple sets of dice in one command, separated by commas (e.g. `.roll_multiple 2d20 3, 1d8`). Each group is rolled and reported separately", "any"),
             ("`.create_character <class> <name>`", "Create and save a new D&D character. Valid classes: Artificer, Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard. Each name must be unique per user", "any"),
-            ("`.view_characters`", "List all D&D characters you currently have saved", "any")
+            ("`.view_characters`", "List all D&D characters you currently have saved", "any"),
+            ("`.view_character <name>`", "View a single character's full stat sheet", "any"),
+            ("`.character_delete <name>`", "Permanently delete one of your saved characters", "any")
         ]
     },
     "Fun": {
@@ -219,10 +223,15 @@ COMMAND_MODULES = {
             ("`.quote_list <user> <amount>`", "Display random quotes from a specific person by their author name in the database (maximum 5 at a time)", "any"),
             ("`.quote_count <user>`", "Check how many quotes a specific person has saved in the database", "any"),
             ("`.quote_top`", "See the top 10 people with the most quotes in the database", "any"),
+            ("`.quote_search <keyword>`", "Search all quotes for ones containing a keyword or phrase. Shows up to 10 matches", "any"),
+            ("`.quote_stats`", "Show overall quote database stats: total quotes, authors, average per author, and most quoted", "any"),
+            ("`.profile`", "View your personal profile: beans, partner, D&D characters, daily streak, trivia wins, and bookmarked verses", "any"),
             ("`.eight_ball <question>`", "Consult the Magic 8-Ball with a yes/no question for a cryptic answer", "any"),
             ("`.coinflip`", "Flip a coin and get Heads or Tails", "any"),
             ("`.trivia <rounds>`", "Start a multiplayer trivia session in the current channel. Questions are drawn from your enabled categories (set with `.trivia_config`). The first person to type the correct answer wins the round. Regular users are limited to 10 rounds max. The winner earns 25 Coffee Beans per correct answer", "any"),
             ("`.trivia_config`", "Open an interactive dropdown menu to choose which trivia categories appear in your games", "any"),
+            ("`.quick_trivia [category]`", "Ask a single trivia question — no session required. First correct answer wins 10 beans. Optionally specify a category (e.g. `animals`, `history`)", "any"),
+            ("`.trivia_stats`", "View your personal trivia stats: total correct answers and your enabled categories", "any"),
             ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.obliterate`\n**Affectionate:** `.kiss` `.smooch` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill`\n**Reactions:** `.stare` `.shocked`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode`", "any")
         ]
     },
@@ -234,7 +243,8 @@ COMMAND_MODULES = {
             ("`.beans`", "Check your current Coffee Bean balance", "any"),
             ("`.tip <@user> <amount>`", "Send some of your Coffee Beans to another user. You cannot tip yourself or bots, and you must have enough beans to cover the amount", "any"),
             ("`.bean_top`", "See the top 10 richest users in the server by Coffee Bean balance", "any"),
-            ("`.daily`", "Claim your daily Coffee Bean reward (base: 100 beans). Your streak grows by 1 each consecutive day you claim, adding +2% to your reward per streak day. Missing more than 48 hours resets your streak. 24-hour cooldown", "any")
+            ("`.daily`", "Claim your daily Coffee Bean reward (base: 100 beans). Your streak grows by 1 each consecutive day you claim, adding +2% to your reward per streak day. Missing more than 48 hours resets your streak. 24-hour cooldown", "any"),
+            ("`.cafe_status`", "Show a server-wide snapshot: beans in circulation, registered users, active marriages, and total quotes", "any")
         ]
     },
     "Faith": {
@@ -244,9 +254,12 @@ COMMAND_MODULES = {
             ("`.send_anonymous_testimony <message>`", "Send a testimony to the server's testimony channel with no name attached. **Must be used in DMs with the bot.** The bot will show you a preview and ask you to confirm before sending", "any"),
             ("`.random_verse [version]`", "Display a random Bible verse. Optionally specify a version (e.g. `ASV`) to pull from that translation only", "any"),
             ("`.verse_context`", "Show the 2 verses before and after the last randomly generated verse (if they exist)", "any"),
-            ("`.lookup_verse <version> <book> <chapter> <verse>`", "Look up a Bible verse or range of verses (e.g. `.lookup_verse ASV John 3 16` or `.lookup_verse ASV John 3 14-18`). Non-admins are limited to 8 verses per range", "any"),
+            ("`.lookup_verse <version> <book> <chapter:verse>`", "Look up a Bible verse or range of verses (e.g. `.lookup_verse ASV John 3:16` or `.lookup_verse ASV John 3:14-18`). Non-admins are limited to 8 verses per range", "any"),
             ("`.list_versions`", "List all Bible versions currently loaded", "any"),
-            ("`.verse_search <query>`", "Search the Bible index for verses containing a keyword or phrase. Prefix with `version:<VERSION>` to filter by translation (e.g. `.verse_search version:ASV love one another`)", "any")
+            ("`.verse_search <max_results> <query>`", "Search the Bible index for verses containing a keyword or phrase. Prefix with `version:<VERSION>` to filter by translation (e.g. `.verse_search 5 version:ASV love one another`)", "any"),
+            ("`.verse_compare <version1> <version2> <book> <chapter:verse>`", "Show the same verse in two translations side by side (e.g. `.verse_compare KJV NIV John 3:16`)", "any"),
+            ("`.verse_bookmark`", "Save the last randomly generated verse to your personal bookmarks", "any"),
+            ("`.verse_bookmarks`", "List all of your bookmarked Bible verses", "any")
         ]
     },
     "Music": {
@@ -409,6 +422,18 @@ async def whois(ctx, member: discord.Member):
 
 
 @bot.command()
+@is_authorized("moderator")
+async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided"):
+    await ModerationModule.warn_user(ctx, member, reason)
+
+
+@bot.command()
+@is_authorized("moderator")
+async def warnings(ctx, member: discord.Member):
+    await ModerationModule.view_warnings(ctx, member)
+
+
+@bot.command()
 @is_authorized("any")
 async def roll(ctx, dice_type_and_amount: str, modifier: int = 0):
     await DndModule.roll_dice(ctx, dice_type_and_amount, modifier)
@@ -430,6 +455,18 @@ async def create_character(ctx, dnd_class: str, name: str):
 @is_authorized("any")
 async def view_characters(ctx):
     await DndModule.view_characters(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def view_character(ctx, *, name: str):
+    await DndModule.view_character(ctx, name)
+
+
+@bot.command()
+@is_authorized("any")
+async def character_delete(ctx, *, name: str):
+    await DndModule.character_delete(ctx, name)
 
 
 @bot.command()
@@ -669,6 +706,12 @@ async def bean_top(ctx):
 
 @bot.command()
 @is_authorized("any")
+async def cafe_status(ctx):
+    await EconomyModule.cafe_status(ctx)
+
+
+@bot.command()
+@is_authorized("any")
 async def quote_list(ctx, user: str, amount: int = 1):
     await FunModule.quote_list(ctx, user, amount)
 
@@ -683,6 +726,24 @@ async def quote_count(ctx, user: str):
 @is_authorized("any")
 async def quote_top(ctx):
     await FunModule.quote_top(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def quote_search(ctx, *, keyword: str):
+    await FunModule.quote_search(ctx, keyword)
+
+
+@bot.command()
+@is_authorized("any")
+async def quote_stats(ctx):
+    await FunModule.quote_stats(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def profile(ctx):
+    await FunModule.profile(ctx)
 
 
 @bot.command()
@@ -729,7 +790,11 @@ async def verse_context(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: str):
+async def lookup_verse(ctx, version: str, book: str, reference: str):
+    if ":" not in reference:
+        await ctx.send("❌ Invalid format. Use `<chapter>:<verse>` (e.g. `.lookup_verse ASV John 3:16` or `.lookup_verse ASV John 3:14-18`).")
+        return
+    chapter, verse_num = reference.split(":", 1)
     if "-" in verse_num:
         try:
             start, end = verse_num.split("-", 1)
@@ -738,7 +803,7 @@ async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: st
                 await ctx.send("❌ Non-admins can only look up 8 verses at a time.")
                 return
         except ValueError:
-            await ctx.send("❌ Invalid verse range. Use `<start>-<end>` (e.g. `.lookup_verse ASV John 3 14-18`).")
+            await ctx.send("❌ Invalid verse range. Use `<chapter>:<start>-<end>` (e.g. `.lookup_verse ASV John 3:14-18`).")
             return
     await FaithModule.lookup_verse(ctx, version, book, chapter, verse_num)
 
@@ -747,6 +812,28 @@ async def lookup_verse(ctx, version: str, book: str, chapter: str, verse_num: st
 @is_authorized("any")
 async def list_versions(ctx):
    await FaithModule.list_versions(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def verse_compare(ctx, version1: str, version2: str, book: str, reference: str):
+    if ":" not in reference:
+        await ctx.send("❌ Invalid format. Use `<chapter>:<verse>` (e.g. `.verse_compare KJV NIV John 3:16`).")
+        return
+    chapter, verse_num = reference.split(":", 1)
+    await FaithModule.verse_compare(ctx, version1, version2, book, chapter, verse_num)
+
+
+@bot.command()
+@is_authorized("any")
+async def verse_bookmark(ctx):
+    await FaithModule.verse_bookmark(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def verse_bookmarks(ctx):
+    await FaithModule.verse_bookmarks(ctx)
 
 
 @bot.command()
@@ -783,6 +870,20 @@ async def trivia(ctx, rounds: int):
         return
 
     await TriviaModule.start_session(ctx, rounds, user_data)
+
+
+@bot.command()
+@is_authorized("any")
+async def quick_trivia(ctx, category: str = None):
+    user_data = DataStorage.get_or_create_user(ctx.author.id)
+    await TriviaModule.quick_trivia(ctx, user_data, category)
+
+
+@bot.command()
+@is_authorized("any")
+async def trivia_stats(ctx):
+    user_data = DataStorage.get_or_create_user(ctx.author.id)
+    await TriviaModule.trivia_stats(ctx, user_data)
 
 
 @bot.command()
@@ -1088,6 +1189,20 @@ async def slash_unmute(interaction: discord.Interaction, member: discord.Member)
     await ModerationModule.remove_timeout(ctx, member)
 
 
+@bot.tree.command(name="warn", description="Log a warning against a server member")
+async def slash_warn(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason provided"):
+    if not await slash_auth_check(interaction, "moderator"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.warn_user(ctx, member, reason)
+
+
+@bot.tree.command(name="warnings", description="View a member's warning log")
+async def slash_warnings(interaction: discord.Interaction, member: discord.Member):
+    if not await slash_auth_check(interaction, "moderator"): return
+    ctx = InteractionContext(interaction)
+    await ModerationModule.view_warnings(ctx, member)
+
+
 @bot.tree.command(name="whois", description="View a detailed profile of a server member")
 async def slash_whois(interaction: discord.Interaction, member: discord.Member):
     if not await slash_auth_check(interaction, "server_admin"): return
@@ -1123,6 +1238,20 @@ async def slash_view_characters(interaction: discord.Interaction):
     if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await DndModule.view_characters(ctx)
+
+
+@bot.tree.command(name="view_character", description="View a single D&D character's full sheet")
+async def slash_view_character(interaction: discord.Interaction, name: str):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await DndModule.view_character(ctx, name)
+
+
+@bot.tree.command(name="character_delete", description="Delete one of your saved D&D characters")
+async def slash_character_delete(interaction: discord.Interaction, name: str):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await DndModule.character_delete(ctx, name)
 
 
 # --- Fun ---
@@ -1199,6 +1328,27 @@ async def slash_quote_top(interaction: discord.Interaction):
     await FunModule.quote_top(ctx)
 
 
+@bot.tree.command(name="quote_search", description="Search quotes by keyword or phrase")
+async def slash_quote_search(interaction: discord.Interaction, keyword: str):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.quote_search(ctx, keyword)
+
+
+@bot.tree.command(name="quote_stats", description="Show quote database statistics")
+async def slash_quote_stats(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.quote_stats(ctx)
+
+
+@bot.tree.command(name="profile", description="View your personal profile dashboard")
+async def slash_profile(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.profile(ctx)
+
+
 @bot.tree.command(name="eight_ball", description="Consult the Magic 8-Ball with a yes/no question")
 async def slash_eight_ball(interaction: discord.Interaction, question: str = "No question asked"):
     if not await slash_auth_check(interaction, "any"): return
@@ -1239,6 +1389,23 @@ async def slash_trivia_config(interaction: discord.Interaction):
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     ctx = InteractionContext(interaction)
     await TriviaModule.open_config(ctx, user_data)
+
+
+@bot.tree.command(name="quick_trivia", description="Single trivia question — first correct answer wins 10 beans")
+async def slash_quick_trivia(interaction: discord.Interaction, category: Optional[str] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    user_data = DataStorage.get_or_create_user(interaction.user.id)
+    await interaction.response.defer()
+    ctx = InteractionContext(interaction)
+    await TriviaModule.quick_trivia(ctx, user_data, category)
+
+
+@bot.tree.command(name="trivia_stats", description="View your personal trivia statistics")
+async def slash_trivia_stats(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    user_data = DataStorage.get_or_create_user(interaction.user.id)
+    ctx = InteractionContext(interaction)
+    await TriviaModule.trivia_stats(ctx, user_data)
 
 
 # --- Emotes ---
@@ -1434,6 +1601,13 @@ async def slash_daily(interaction: discord.Interaction):
     await EconomyModule.daily(ctx)
 
 
+@bot.tree.command(name="cafe_status", description="Show a server-wide snapshot of cafe activity")
+async def slash_cafe_status(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.cafe_status(ctx)
+
+
 # --- Faith ---
 
 @bot.tree.command(name="send_anonymous_testimony", description="Send a testimony anonymously (use in DMs with the bot)")
@@ -1457,9 +1631,13 @@ async def slash_verse_context(interaction: discord.Interaction):
     await FaithModule.verse_context(ctx)
 
 
-@bot.tree.command(name="lookup_verse", description="Look up a Bible verse or range (e.g. ASV John 3 16 or ASV John 3 14-18)")
-async def slash_lookup_verse(interaction: discord.Interaction, version: str, book: str, chapter: str, verse_num: str):
+@bot.tree.command(name="lookup_verse", description="Look up a Bible verse or range (e.g. ASV John 3:16 or ASV John 3:14-18)")
+async def slash_lookup_verse(interaction: discord.Interaction, version: str, book: str, reference: str):
     if not await slash_auth_check(interaction, "any"): return
+    if ":" not in reference:
+        await interaction.response.send_message("❌ Invalid format. Use `<chapter>:<verse>` (e.g. `3:16` or `3:14-18`).", ephemeral=True)
+        return
+    chapter, verse_num = reference.split(":", 1)
     if "-" in verse_num:
         try:
             start, end = verse_num.split("-", 1)
@@ -1468,7 +1646,7 @@ async def slash_lookup_verse(interaction: discord.Interaction, version: str, boo
                 await interaction.response.send_message("❌ Non-admins can only look up 8 verses at a time.", ephemeral=True)
                 return
         except ValueError:
-            await interaction.response.send_message("❌ Invalid verse range. Use `<start>-<end>` (e.g. `14-18`).", ephemeral=True)
+            await interaction.response.send_message("❌ Invalid verse range. Use `<chapter>:<start>-<end>` (e.g. `3:14-18`).", ephemeral=True)
             return
     ctx = InteractionContext(interaction)
     await FaithModule.lookup_verse(ctx, version, book, chapter, verse_num)
@@ -1489,6 +1667,31 @@ async def slash_verse_search(interaction: discord.Interaction, max_results: int,
         return
     ctx = InteractionContext(interaction)
     await FaithModule.search_verses(ctx, max_results, query=query)
+
+
+@bot.tree.command(name="verse_compare", description="Compare the same verse in two translations side by side")
+async def slash_verse_compare(interaction: discord.Interaction, version1: str, version2: str, book: str, reference: str):
+    if not await slash_auth_check(interaction, "any"): return
+    if ":" not in reference:
+        await interaction.response.send_message("❌ Invalid format. Use `<chapter>:<verse>` (e.g. `3:16`).", ephemeral=True)
+        return
+    chapter, verse_num = reference.split(":", 1)
+    ctx = InteractionContext(interaction)
+    await FaithModule.verse_compare(ctx, version1, version2, book, chapter, verse_num)
+
+
+@bot.tree.command(name="verse_bookmark", description="Bookmark the last randomly generated verse")
+async def slash_verse_bookmark(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FaithModule.verse_bookmark(ctx)
+
+
+@bot.tree.command(name="verse_bookmarks", description="List all your bookmarked Bible verses")
+async def slash_verse_bookmarks(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FaithModule.verse_bookmarks(ctx)
 
 
 # --- Music ---

@@ -1,4 +1,5 @@
 import random
+import discord
 import DataStorage
 from DataStorage import get_or_create_user
 from Classes.DndCharacter import DndCharacter
@@ -125,4 +126,45 @@ async def view_characters(ctx):
     user = get_or_create_user(user_id)
 
     await ctx.send(user.view_characters())
+
+
+async def view_character(ctx, name: str):
+    """View a single character's full sheet."""
+    user = get_or_create_user(ctx.author.id)
+    character = user.get_character(name)
+    if character is None:
+        await ctx.send(f"❌ No character named **{name}** found.")
+        return
+
+    embed = discord.Embed(
+        title=f"⚔️ {character.get_name()}",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="Class", value=character.get_class().capitalize(), inline=True)
+    embed.add_field(name="Level", value=str(character.get_level()), inline=True)
+    embed.add_field(name="HP", value=f"{character.current_hp}/{character.max_hp}", inline=True)
+    embed.add_field(name="AC", value=str(character.armor_class), inline=True)
+    embed.add_field(name="Speed", value=f"{character.speed} ft", inline=True)
+    embed.add_field(name="Gold", value=str(character.gold), inline=True)
+    stats_str = (
+        f"STR {character.strength} | DEX {character.dexterity} | CON {character.constitution}\n"
+        f"INT {character.intelligence} | WIS {character.wisdom} | CHA {character.charisma}"
+    )
+    embed.add_field(name="Stats", value=stats_str, inline=False)
+    if character.inventory:
+        embed.add_field(name="Inventory", value=", ".join(character.inventory), inline=False)
+    await ctx.send(embed=embed)
+
+
+async def character_delete(ctx, name: str):
+    """Delete one of the user's saved characters."""
+    user = get_or_create_user(ctx.author.id)
+    character = user.get_character(name)
+    if character is None:
+        await ctx.send(f"❌ No character named **{name}** found.")
+        return
+
+    user.characters.remove(character)
+    DataStorage.save_user_data()
+    await ctx.send(f"🗑️ Character **{name}** has been deleted.")
 

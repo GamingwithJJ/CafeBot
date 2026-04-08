@@ -32,6 +32,13 @@ class User:
 
         #Trivia
         self.enabled_trivia_categories = []
+        self.trivia_correct = 0
+
+        # Faith
+        self.bookmarked_verses = []  # List of [version, book, chapter, verse_num]
+
+        # Moderation
+        self.warnings = []  # List of {"reason": str, "issued_by": str, "timestamp": str}
 
     def set_marriage_partner(self, new_partner: int):
         self.marriage_partner = new_partner
@@ -101,6 +108,18 @@ class User:
             return_string += f"Name: {character.get_name()}, Class: {character.get_class()}, Level: {character.get_level()} \n"
         return return_string
 
+    def add_verse_bookmark(self, version: str, book: str, chapter: str, verse_num: str):
+        self.bookmarked_verses.append([version, book, chapter, verse_num])
+
+    def get_verse_bookmarks(self):
+        return self.bookmarked_verses
+
+    def add_warning(self, reason: str, issued_by: str, timestamp: str):
+        self.warnings.append({"reason": reason, "issued_by": issued_by, "timestamp": timestamp})
+
+    def get_warnings(self):
+        return self.warnings
+
     def get_beans(self):
         return self.beans
 
@@ -108,7 +127,7 @@ class User:
         self.beans = beans
 
     def ajust_beans(self, amount: float):
-        self.beans += amount
+        self.beans = round(self.beans + amount, 2)
 
     def set_last_shift(self, time: datetime.datetime):
         self.last_shift = time
@@ -130,7 +149,10 @@ class User:
             "partner_gained_date": self.partner_gained_date.isoformat() if self.partner_gained_date else None,
             "last_daily": self.last_daily.isoformat() if self.last_daily else None,
             "daily_reward_streak": self.daily_reward_streak,
-            "enabled_trivia_categories" : self.enabled_trivia_categories
+            "enabled_trivia_categories" : self.enabled_trivia_categories,
+            "trivia_correct": self.trivia_correct,
+            "bookmarked_verses": self.bookmarked_verses,
+            "warnings": self.warnings
         }
 
     def to_json(self):

@@ -199,11 +199,12 @@ async def quote_list(ctx, user: str, number):
         await ctx.send(f"{user} user is not a recognized quote user")
         return
 
+    available = DataStorage.quotes[user]
+    number = min(number, len(available))
+    selected_quotes = random.sample(available, number)
     embed = discord.Embed(title=f"📖 Quotes from {user}", color=discord.Color.gold())
-    for number in range(0, number):
-        random_quote_number = random.randint(0, len(DataStorage.quotes[user]) - 1)
-        random_quote = DataStorage.quotes[user][random_quote_number]
-        embed.add_field(name=f"Quote #{number + 1}", value=f'"{random_quote.get_text()}"', inline=False)
+    for i, quote in enumerate(selected_quotes):
+        embed.add_field(name=f"Quote #{i + 1}", value=f'"{quote.get_text()}"', inline=False)
     await ctx.send(embed=embed)
 
 
@@ -391,6 +392,75 @@ async def marriage_top(ctx):
     )
     embed.set_footer(text="CafeBot Love Registry | ☕💕")
 
+    await ctx.send(embed=embed)
+
+
+async def quote_search(ctx, keyword: str):
+    """Search quotes by text content."""
+    keyword_lower = keyword.lower()
+    results = []
+    for author, quote_list in DataStorage.quotes.items():
+        for q in quote_list:
+            if keyword_lower in q.get_text().lower():
+                results.append(q)
+
+    if not results:
+        await ctx.send(f"🔍 No quotes found containing **\"{keyword}\"**.")
+        return
+
+    embed = discord.Embed(title=f"🔍 Quotes matching \"{keyword}\"", color=discord.Color.gold())
+    for q in results[:10]:
+        embed.add_field(name=f"— {q.get_author()}", value=f'"{q.get_text()}"', inline=False)
+    if len(results) > 10:
+        embed.set_footer(text=f"Showing 10 of {len(results)} matches.")
+    await ctx.send(embed=embed)
+
+
+async def quote_stats(ctx):
+    """Show overall quote database statistics."""
+    if not DataStorage.quotes:
+        await ctx.send("No quotes in the database yet.")
+        return
+
+    total = sum(len(qs) for qs in DataStorage.quotes.values())
+    top_author = max(DataStorage.quotes, key=lambda a: len(DataStorage.quotes[a]))
+    avg = total / len(DataStorage.quotes)
+
+    embed = discord.Embed(title="📊 Quote Database Stats", color=discord.Color.gold())
+    embed.add_field(name="Total Quotes", value=str(total), inline=True)
+    embed.add_field(name="Total Authors", value=str(len(DataStorage.quotes)), inline=True)
+    embed.add_field(name="Average per Author", value=f"{avg:.1f}", inline=True)
+    embed.add_field(name="Most Quoted", value=f"{top_author} ({len(DataStorage.quotes[top_author])})", inline=False)
+    await ctx.send(embed=embed)
+
+
+async def profile(ctx):
+    """Show a personal profile dashboard."""
+    author_id = ctx.author.id
+    user_data = DataStorage.get_or_create_user(author_id)
+
+    partner_id = user_data.get_marriage_partner()
+    if partner_id:
+        partner_display = f"<@{partner_id}>"
+    else:
+        partner_display = "Single 💔"
+
+    author_name = ctx.author.display_name.lower().capitalize()
+    quote_count = len(DataStorage.quotes.get(author_name, []))
+
+    embed = discord.Embed(
+        title=f"☕ {ctx.author.display_name}'s Profile",
+        color=discord.Color.from_rgb(111, 78, 55)
+    )
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.add_field(name="💰 Beans", value=f"{user_data.get_beans():.0f}", inline=True)
+    embed.add_field(name="💍 Partner", value=partner_display, inline=True)
+    embed.add_field(name="🎙️ Quotes in DB", value=str(quote_count), inline=True)
+    embed.add_field(name="⚔️ D&D Characters", value=str(len(user_data.characters)), inline=True)
+    embed.add_field(name="📅 Daily Streak", value=f"{user_data.daily_reward_streak} days", inline=True)
+    embed.add_field(name="🧠 Trivia Wins", value=str(user_data.trivia_correct), inline=True)
+    embed.add_field(name="📖 Bookmarked Verses", value=str(len(user_data.bookmarked_verses)), inline=True)
+    embed.set_footer(text="CafeBot Profile | ☕")
     await ctx.send(embed=embed)
 
 

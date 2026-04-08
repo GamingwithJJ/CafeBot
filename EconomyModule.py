@@ -18,7 +18,7 @@ async def beans(ctx):
 
     embed = discord.Embed(
         title="☕ Coffee Bean Balance",
-        description=f"**{user.display_name}** has **{user_data.get_beans()}** beans.",
+        description=f"**{user.display_name}** has **{int(user_data.get_beans())}** beans.",
         color=discord.Color.from_rgb(111, 78, 55)
     )
     embed.set_thumbnail(url=user.display_avatar.url)
@@ -59,7 +59,7 @@ async def shift(ctx):
         description=f"You worked a shift at the cafe and earned **{beans_earned}** Beans!",
         color=discord.Color.from_rgb(111, 78, 55)  # Coffee brown
     )
-    embed.add_field(name="💰 New Balance", value=f"**{user.get_beans()}** beans", inline=False)
+    embed.add_field(name="💰 New Balance", value=f"**{int(user.get_beans())}** beans", inline=False)
     embed.set_footer(text=f"Next shift available in {BREW_COOLDOWN_TIME} minutes")
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
@@ -90,7 +90,7 @@ async def tip(ctx, target: discord.Member, amount: float):
     if author_data.get_beans() < amount:
         embed = discord.Embed(
             title="❌ Insufficient Beans",
-            description=f"You only have **{author_data.get_beans()}** beans, but tried to tip **{amount}**.",
+            description=f"You only have **{int(author_data.get_beans())}** beans, but tried to tip **{int(amount)}**.",
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
@@ -102,12 +102,12 @@ async def tip(ctx, target: discord.Member, amount: float):
 
     embed = discord.Embed(
         title="💸 Tip Sent!",
-        description=f"{ctx.author.mention} tipped **{amount}** beans to {target.mention}!",
+        description=f"{ctx.author.mention} tipped **{int(amount)}** beans to {target.mention}!",
         color=discord.Color.green()
     )
 
-    embed.add_field(name=f"{ctx.author.display_name}'s Balance", value=f"{author_data.beans} beans", inline=True)
-    embed.add_field(name=f"{target.display_name}'s Balance", value=f"{target_data.beans} beans", inline=True)
+    embed.add_field(name=f"{ctx.author.display_name}'s Balance", value=f"{int(author_data.get_beans())} beans", inline=True)
+    embed.add_field(name=f"{target.display_name}'s Balance", value=f"{int(target_data.get_beans())} beans", inline=True)
 
     await ctx.send(embed=embed)
 
@@ -136,7 +136,7 @@ async def bean_top(ctx):
 
     description = ""
     for i, user in enumerate(top_users):
-        bean_amount = user.get_beans()
+        bean_amount = int(user.get_beans())
         description += f"{i + 1}. <@{user.discord_id}>: {bean_amount}\n"
 
     embed = discord.Embed(
@@ -146,6 +146,28 @@ async def bean_top(ctx):
     )
     embed.set_footer(text="Beantop List")
 
+    await ctx.send(embed=embed)
+
+
+async def cafe_status(ctx):
+    """Show a server-wide snapshot of cafe activity."""
+    user_saves = DataStorage.user_data
+
+    total_beans = sum(u.get_beans() for u in user_saves.values())
+    total_marriages = sum(1 for u in user_saves.values() if u.marriage_partner is not None) // 2
+    total_quotes = sum(len(qs) for qs in DataStorage.quotes.values())
+    total_authors = len(DataStorage.quotes)
+
+    embed = discord.Embed(
+        title="☕ Cafe Status",
+        description="A snapshot of the server's cafe activity!",
+        color=discord.Color.from_rgb(111, 78, 55)
+    )
+    embed.add_field(name="💰 Beans in Circulation", value=f"{total_beans:,.0f}", inline=True)
+    embed.add_field(name="👥 Registered Users", value=str(len(user_saves)), inline=True)
+    embed.add_field(name="💍 Active Marriages", value=str(total_marriages), inline=True)
+    embed.add_field(name="📖 Total Quotes", value=f"{total_quotes} from {total_authors} authors", inline=False)
+    embed.set_footer(text="CafeBot | ☕")
     await ctx.send(embed=embed)
 
 
@@ -176,7 +198,7 @@ async def daily(ctx):
             user.daily_reward_streak = 0
             await ctx.send("You have lost your streak!")
 
-    amount_to_reward = DAILY_REWARD_BASE * (1 + (user.daily_reward_streak * 0.02))
+    amount_to_reward = int(DAILY_REWARD_BASE * (1 + (user.daily_reward_streak * 0.02)))
     user.daily_reward_streak += 1
     user.ajust_beans(amount_to_reward)
     user.last_daily = now
@@ -187,7 +209,7 @@ async def daily(ctx):
         description=f"You claimed your daily allowance of **{amount_to_reward}** Coffee Beans! \n Your current streak is {user.daily_reward_streak} days!",
         color=discord.Color.gold()
     )
-    embed.add_field(name="💰 New Balance", value=f"**{user.get_beans()}** beans")
+    embed.add_field(name="💰 New Balance", value=f"**{int(user.get_beans())}** beans")
     embed.set_footer(text="See you tomorrow! ☕")
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
 

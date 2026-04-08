@@ -166,6 +166,6 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
         description=f"{ctx.author.mention} granted **{amount}** beans to {target.mention}!",
         color=discord.Color.green()
     )
-    embed.add_field(name=f"{target.display_name}'s New Balance", value=f"{target_data.get_beans()} beans")
+    embed.add_field(name=f"{target.display_name}'s New Balance", value=f"{int(target_data.get_beans())} beans")
 
     await ctx.send(embed=embed)
