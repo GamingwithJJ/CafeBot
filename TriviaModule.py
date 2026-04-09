@@ -33,7 +33,7 @@ class TriviaConfigView(discord.ui.View):
 
     # What happens when they make a selection
     async def select_callback(self, interaction: discord.Interaction):
-        # Security: Only the person who ran the command can click the menu
+        # Only the person who ran the command can click the menu
         if interaction.user.id != int(self.user_data.discord_id):
             await interaction.response.send_message("❌ This is not your menu!", ephemeral=True)
             return
@@ -66,8 +66,9 @@ async def start_session(ctx, rounds: int, user_data):
 
     for category in user_data.enabled_trivia_categories:
         if category in DataStorage.trivia_questions:
-            for sub_category in DataStorage.trivia_questions[category]:
-                available_questions.extend(DataStorage.trivia_questions[category][sub_category])
+            for sub_category, questions in DataStorage.trivia_questions[category].items():
+                for q in questions:
+                    available_questions.append((sub_category, q[0], q[1]))
 
     if len(available_questions) < rounds:
         await ctx.send(
@@ -87,27 +88,28 @@ async def start_session(ctx, rounds: int, user_data):
         # 2. The Game Loop
         for round_num in range(1, rounds + 1):
 
-            # --- THE FIX ---
-            # Grab the item first, unpack it, and remove the exact item!
             chosen_item = random.choice(available_questions)
-            question_text, acceptable_answers = chosen_item
+            sub_category, question_text, acceptable_answers = chosen_item
             available_questions.remove(chosen_item)
-            # --------------
 
             embed = discord.Embed(
                 title=f"Round {round_num} of {rounds}",
                 description=f"**{question_text}**",
                 color=discord.Color.blue()
             )
-            embed.set_footer(text="You have 15 seconds to answer!")
+            embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 15 seconds to answer!")
             await ctx.send(embed=embed)
 
             def check(m):
                 return m.channel == ctx.channel and not m.author.bot
 
             try:
+                deadline = asyncio.get_event_loop().time() + 15.0
                 while True:
-                    msg = await ctx.bot.wait_for('message', timeout=15.0, check=check)
+                    remaining = deadline - asyncio.get_event_loop().time()
+                    if remaining <= 0:
+                        raise asyncio.TimeoutError
+                    msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
 
                     if any(answer in msg.content.lower() for answer in acceptable_answers):
                         official_answer = acceptable_answers[0].capitalize()
@@ -158,38 +160,44 @@ async def quick_trivia(ctx, user_data, category: str = None):
     if category:
         cat_lower = category.lower()
         if cat_lower in DataStorage.trivia_questions:
-            for sub in DataStorage.trivia_questions[cat_lower].values():
-                available_questions.extend(sub)
+            for sub_category, questions in DataStorage.trivia_questions[cat_lower].items():
+                for q in questions:
+                    available_questions.append((sub_category, q[0], q[1]))
         else:
             cats = ", ".join(DataStorage.trivia_questions.keys())
             await ctx.send(f"❌ Category **{category}** not found. Available: `{cats}`")
             return
     else:
-        for cat in user_data.enabled_trivia_categories:
-            if cat in DataStorage.trivia_questions:
-                for sub in DataStorage.trivia_questions[cat].values():
-                    available_questions.extend(sub)
+        for category in user_data.enabled_trivia_categories:
+            if category in DataStorage.trivia_questions:
+                for sub_category, questions in DataStorage.trivia_questions[category].items():
+                    for q in questions:
+                        available_questions.append((sub_category, q[0], q[1]))
 
     if not available_questions:
         await ctx.send("⚠️ No questions available. Enable some categories with `.trivia_config` or specify a category.")
         return
 
-    question_text, acceptable_answers = random.choice(available_questions)
+    sub_category, question_text, acceptable_answers = random.choice(available_questions)
 
     embed = discord.Embed(
-        title="🧠 Quick Trivia!",
+        title=f"🧠 Quick Trivia! (Category: {category})",
         description=f"**{question_text}**",
         color=discord.Color.blue()
     )
-    embed.set_footer(text="You have 15 seconds to answer! First correct answer wins 10 beans.")
+    embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 15 seconds to answer! First correct answer wins 10 beans.")
     await ctx.send(embed=embed)
 
     def check(m):
         return m.channel == ctx.channel and not m.author.bot
 
     try:
+        deadline = asyncio.get_event_loop().time() + 15.0
         while True:
-            msg = await ctx.bot.wait_for('message', timeout=15.0, check=check)
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                raise asyncio.TimeoutError
+            msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
             if any(answer in msg.content.lower() for answer in acceptable_answers):
                 official_answer = acceptable_answers[0].capitalize()
                 winner_data = DataStorage.get_or_create_user(msg.author.id)

@@ -14,7 +14,8 @@ async def roll_dice(ctx, dice_type_and_amount: str, modifier):
     dice_type = dice_type_and_amount_list[1]
 
     if amount > 100:
-        await ctx.send("You cant roll more than 100 dice at a time. (Blame Caleb.) (Why would you need to do that?)")
+        await ctx.send("You cant roll more than 100 dice at a time. (Blame Caleb.)"
+                       " (Why would you need to do that?)")
         return
 
     if dice_type == "100":
@@ -58,11 +59,12 @@ async def roll_dice(ctx, dice_type_and_amount: str, modifier):
         await ctx.send(f" `d{dice_type}` is not recognized as a dice type")
         return
 
-    total = sum(rolls_to_return) + modifier
+    raw_total = sum(rolls_to_return)
+    total = raw_total + modifier
 
-    output_string = f"Rolls for {amount}D{dice_type} were: {str(rolls_to_return)} total of all rolls is {total}"
-    if modifier > 0:
-        output_string += f" plus your modifier is {total}"
+    output_string = f"Rolls for {amount}D{dice_type} were: {str(rolls_to_return)} total of all rolls is {raw_total}"
+    if modifier != 0:
+        output_string += f", plus modifier {modifier} = {total}"
     await ctx.send(output_string)
 
 

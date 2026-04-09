@@ -188,8 +188,8 @@ async def remove_trivia(ctx, category: str, sub_category: str, question: str):
 
 async def admin_tip(ctx, target: discord.Member, amount: float):
     """Grants a user beans without requiring the admin to have funds."""
-    if amount <= 0:
-        await ctx.send("Amount must be greater than 0.")
+    if amount == 0:
+        await ctx.send("Amount must be greater or less than 0.")
         return
 
     target_data = DataStorage.get_or_create_user(target.id)
