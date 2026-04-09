@@ -37,6 +37,41 @@ async def remove_gif(ctx, type: str, link: str):
     await ctx.send("Gif with the specified link was not found.")
 
 
+async def add_gif_message(ctx, type: str, message: str):
+    """Adds a new message template to a gif emote category."""
+    type = type.lower()
+
+    if type not in DataStorage.gif_messages:
+        await ctx.send(f"❌ No gif category named `{type}` found.")
+        return
+
+    if message in DataStorage.gif_messages[type]:
+        await ctx.send("That message already exists for this category.")
+        return
+
+    DataStorage.gif_messages[type].append(message)
+    DataStorage.save_gif_messages()
+    await ctx.send(f"✅ Added message to `{type}`.")
+
+
+async def remove_gif_message(ctx, type: str, message: str):
+    """Removes a message template from a gif emote category by exact text."""
+    type = type.lower()
+
+    if type not in DataStorage.gif_messages:
+        await ctx.send(f"❌ No gif category named `{type}` found.")
+        return
+
+    for index, msg in enumerate(DataStorage.gif_messages[type]):
+        if msg == message:
+            DataStorage.gif_messages[type].pop(index)
+            DataStorage.save_gif_messages()
+            await ctx.send(f"✅ Removed message from `{type}`.")
+            return
+
+    await ctx.send("❌ Could not find that exact message in this category.")
+
+
 async def add_quote(ctx, authors, quote):
     """Adds a new quote with the author"""
     quotes_dictionary = DataStorage.quotes

@@ -260,8 +260,11 @@ async def quote_top(ctx):
 
 async def gif(ctx, type: str, target: discord.Member = None):
     gifs = DataStorage.gifs[type]
-    random_number = random.randint(0, len(gifs) - 1)
-    gif = gifs[random_number]
+    if not gifs:
+        await ctx.send(f"⚠️ No GIFs have been added for `{type}` yet. A bot admin can add some with `.add_gif {type} <url>`.")
+        return
+
+    gif = random.choice(gifs)
 
     embed = discord.Embed(color=discord.Color.random())
 

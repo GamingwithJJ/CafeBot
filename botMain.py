@@ -232,7 +232,7 @@ COMMAND_MODULES = {
             ("`.trivia_config`", "Open an interactive dropdown menu to choose which trivia categories appear in your games", "any"),
             ("`.quick_trivia [category]`", "Ask a single trivia question — no session required. First correct answer wins 10 beans. Optionally specify a category (e.g. `animals`, `history`)", "any"),
             ("`.trivia_stats`", "View your personal trivia stats: total correct answers and your enabled categories", "any"),
-            ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.obliterate`\n**Affectionate:** `.kiss` `.smooch` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill`\n**Reactions:** `.stare` `.shocked`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode`", "any")
+            ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.purge` `.throw` `.mock` `.yoink` `.grip`\n**Affectionate:** `.kiss` `.smooch` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill` `.wink` `.salute` `.snap`\n**Reactions:** `.stare` `.shocked` `.popcorn` `.frog`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode` `.stub_toe`", "any")
         ]
     },
     "Economy": {
@@ -280,6 +280,8 @@ COMMAND_MODULES = {
         "commands": [
             ("`.add_gif <type> <link>`", "Add a new GIF URL to a specific emote category (e.g. `punch`, `hug`)", "bot_admin"),
             ("`.remove_gif <type> <link>`", "Remove a GIF URL from an emote category by its exact link", "bot_admin"),
+            ("`.add_gif_message <type> <message>`", "Add a new message template to an emote category. Use `{author}` and `{target}` as placeholders", "bot_admin"),
+            ("`.remove_gif_message <type> <message>`", "Remove a message template from an emote category by its exact text", "bot_admin"),
             ("`.add_quote <author> <quote>`", "Add a new quote to the database under the given author name", "bot_admin"),
             ("`.remove_quote <quote>`", "Remove a quote from the database by its exact text content", "bot_admin"),
             ("`.add_eight_ball <response>`", "Add a new response to the Magic 8-Ball's answer pool", "bot_admin"),
@@ -518,6 +520,18 @@ async def remove_gif(ctx, type: str, link: str):
 
 
 @bot.command()
+@is_authorized("bot_admin")
+async def add_gif_message(ctx, type: str, *, message: str):
+    await BotAdminModule.add_gif_message(ctx, type, message)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def remove_gif_message(ctx, type: str, *, message: str):
+    await BotAdminModule.remove_gif_message(ctx, type, message)
+
+
+@bot.command()
 @is_authorized("any")
 async def punch(ctx, target: discord.Member = None):
     await FunModule.gif(ctx, "punch", target)
@@ -648,6 +662,67 @@ async def sleep(ctx):
 @is_authorized("any")
 async def purge(ctx, target: discord.Member = None):
     await FunModule.gif(ctx, "purge", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def stub_toe(ctx):
+    await FunModule.gif(ctx, "stub_toe")
+
+
+@bot.command()
+@is_authorized("any")
+async def grip(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "grip", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def throw(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "throw", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def wink(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "wink", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def salute(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "salute", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def snap(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "snap", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def mock(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "mock", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def yoink(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "yoink", target)
+
+
+@bot.command()
+@is_authorized("any")
+async def popcorn(ctx):
+    await FunModule.gif(ctx, "popcorn")
+
+
+@bot.command()
+@is_authorized("any")
+async def frog(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "frog", target)
+
 
 
 @bot.command()
@@ -1287,9 +1362,9 @@ async def slash_marriage_top(interaction: discord.Interaction):
 @bot.tree.command(name="duel", description="Start a turn-based duel against another user")
 async def slash_duel(interaction: discord.Interaction, target: discord.Member):
     if not await slash_auth_check(interaction, "any"): return
-    # Defer so all ctx.send() calls (including the one that is .edit()'d) go through followup
     await interaction.response.defer()
     ctx = InteractionContext(interaction)
+    ctx._responded = True  # already deferred; all sends must go through followup
     await FunModule.duel(ctx, target)
 
 
@@ -1564,6 +1639,77 @@ async def slash_purge(interaction: discord.Interaction, target: Optional[discord
     await FunModule.gif(ctx, "purge", target)
 
 
+@bot.tree.command(name="stub_toe", description="Stub your toe painfully")
+async def slash_stub_toe(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "stub_toe")
+
+
+@bot.tree.command(name="grip", description="Grab someone in an iron grip")
+async def slash_grip(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "grip", target)
+
+
+@bot.tree.command(name="throw", description="Throw someone across the room")
+async def slash_throw(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "throw", target)
+
+
+@bot.tree.command(name="wink", description="Wink at someone")
+async def slash_wink(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "wink", target)
+
+
+@bot.tree.command(name="salute", description="Salute someone")
+async def slash_salute(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "salute", target)
+
+
+@bot.tree.command(name="snap", description="Snap your fingers at someone")
+async def slash_snap(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "snap", target)
+
+
+@bot.tree.command(name="mock", description="Mock someone")
+async def slash_mock(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "mock", target)
+
+
+@bot.tree.command(name="yoink", description="Yoink something from someone")
+async def slash_yoink(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "yoink", target)
+
+
+@bot.tree.command(name="popcorn", description="Pull out popcorn and watch the chaos")
+async def slash_popcorn(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "popcorn")
+
+
+@bot.tree.command(name="frog", description="Become a frog")
+async def slash_frog(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "frog", target)
+
+
+
 # --- Economy ---
 
 @bot.tree.command(name="shift", description="Work a shift at the cafe to earn Coffee Beans")
@@ -1753,6 +1899,20 @@ async def slash_remove_gif(interaction: discord.Interaction, type: str, link: st
     if not await slash_auth_check(interaction, "bot_admin"): return
     ctx = InteractionContext(interaction)
     await BotAdminModule.remove_gif(ctx, type, link)
+
+
+@bot.tree.command(name="add_gif_message", description="Add a message template to an emote category")
+async def slash_add_gif_message(interaction: discord.Interaction, type: str, message: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.add_gif_message(ctx, type, message)
+
+
+@bot.tree.command(name="remove_gif_message", description="Remove a message template from an emote category by exact text")
+async def slash_remove_gif_message(interaction: discord.Interaction, type: str, message: str):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.remove_gif_message(ctx, type, message)
 
 
 @bot.tree.command(name="add_quote", description="Add a new quote to the database")
