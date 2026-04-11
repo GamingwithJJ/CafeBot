@@ -10,7 +10,7 @@ BREW_COOLDOWN_TIME = 30 # Minutes
 BEANS_PER_BREW = (10, 50) # Range between the two numbers
 DAILY_REWARD_BASE = 100
 
-SLOT_SYMBOLS = ["☕", "🫘", "🥐", "💰", "🍀", "7️⃣"]
+SLOT_SYMBOLS = ["☕", "🫘", "🥐", "💰", "🍀", "7️⃣", "🌀", "⭐", "🎪", "☁️"]
 
 
 async def beans(ctx):
@@ -233,12 +233,12 @@ async def slots(ctx, bet: int):
 
     if reels[0] == reels[1] == reels[2]:
         if reels[0] == "7️⃣":
-            multiplier, result_text = 20, "🎰 JACKPOT! Triple 7s!"
+            multiplier, result_text = 231, "🎰 JACKPOT! Triple 7s!"
         else:
-            multiplier, result_text = 5, "🎉 Three of a kind!"
+            multiplier, result_text = 26, "🎉 Three of a kind!"
         winnings = int(bet * multiplier) - bet
     elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
-        winnings = int(bet * 0.5)
+        winnings = bet
         result_text = "✨ Two of a kind!"
     else:
         winnings = -bet
