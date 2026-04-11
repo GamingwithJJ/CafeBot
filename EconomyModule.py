@@ -221,50 +221,82 @@ async def slots(ctx, bet: int):
     """Spin the slot machine and bet Coffee Beans."""
     user = DataStorage.get_or_create_user(ctx.author.id)
 
-    if bet < 1:
-        await ctx.send("Minimum bet is 1 bean.")
+    if bet < 50:
+        await ctx.send("Minimum bet is 50 beans.")
         return
     if bet > user.get_beans():
         await ctx.send(f"You don't have enough beans! Balance: {int(user.get_beans())}")
         return
 
-    reels = [random.choice(SLOT_SYMBOLS) for _ in range(3)]
-    display = " | ".join(reels)
-
-    if reels[0] == reels[1] == reels[2]:
-        if reels[0] == "7️⃣":
-            multiplier, result_text = 231, "🎰 JACKPOT! Triple 7s!"
+    def spin_result():
+        reels = [random.choice(SLOT_SYMBOLS) for _ in range(3)]
+        display = " | ".join(reels)
+        if reels[0] == reels[1] == reels[2]:
+            if reels[0] == "7️⃣":
+                multiplier, result_text = 231, "🎰 JACKPOT! Triple 7s!"
+            else:
+                multiplier, result_text = 26, "🎉 Three of a kind!"
+            winnings = int(bet * multiplier) - bet
+        elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
+            winnings = bet
+            result_text = "✨ Two of a kind!"
         else:
-            multiplier, result_text = 26, "🎉 Three of a kind!"
-        winnings = int(bet * multiplier) - bet
-    elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
-        winnings = bet
-        result_text = "✨ Two of a kind!"
-    else:
-        winnings = -bet
-        result_text = "💸 No match. Better luck next time!"
+            winnings = -bet
+            result_text = "💸 No match. Better luck next time!"
+        return display, winnings, result_text
 
+    def make_embed(display, winnings, result_text):
+        color = discord.Color.gold() if winnings > 0 else discord.Color.red()
+        embed = discord.Embed(title="🎰 Slot Machine", color=color)
+        embed.add_field(name="Reels", value=display, inline=False)
+        embed.add_field(name="Result", value=result_text, inline=False)
+        embed.add_field(name="Bet", value=f"{bet} beans", inline=True)
+        change = f"+{winnings}" if winnings >= 0 else str(winnings)
+        embed.add_field(name="Change", value=f"{change} beans", inline=True)
+        embed.add_field(name="New Balance", value=f"{int(user.get_beans())} beans", inline=True)
+        embed.set_footer(text="CafeBot Casino | ☕🎰")
+        return embed
+
+    class SlotsView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            self.message = None
+
+        @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green)
+        async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user.id != ctx.author.id:
+                await interaction.response.send_message("This isn't your game!", ephemeral=True)
+                return
+            if user.get_beans() < bet:
+                button.disabled = True
+                await interaction.response.edit_message(content="❌ Not enough beans to play again!", view=self)
+                return
+            display, winnings, result_text = spin_result()
+            user.ajust_beans(winnings)
+            DataStorage.save_user_data()
+            await interaction.response.edit_message(embed=make_embed(display, winnings, result_text), view=self)
+
+        async def on_timeout(self):
+            for item in self.children:
+                item.disabled = True
+            if self.message:
+                await self.message.edit(view=self)
+
+    display, winnings, result_text = spin_result()
     user.ajust_beans(winnings)
     DataStorage.save_user_data()
 
-    color = discord.Color.gold() if winnings > 0 else discord.Color.red()
-    embed = discord.Embed(title="🎰 Slot Machine", color=color)
-    embed.add_field(name="Reels", value=display, inline=False)
-    embed.add_field(name="Result", value=result_text, inline=False)
-    embed.add_field(name="Bet", value=f"{bet} beans", inline=True)
-    change = f"+{winnings}" if winnings >= 0 else str(winnings)
-    embed.add_field(name="Change", value=f"{change} beans", inline=True)
-    embed.add_field(name="New Balance", value=f"{int(user.get_beans())} beans", inline=True)
-    embed.set_footer(text="CafeBot Casino | ☕🎰")
-    await ctx.send(embed=embed)
+    view = SlotsView()
+    msg = await ctx.send(embed=make_embed(display, winnings, result_text), view=view)
+    view.message = msg
 
 
 async def blackjack(ctx, bet: int):
     """Play blackjack against the dealer."""
     user = DataStorage.get_or_create_user(ctx.author.id)
 
-    if bet < 1:
-        await ctx.send("Minimum bet is 1 bean.")
+    if bet < 20:
+        await ctx.send("Minimum bet is 20 beans.")
         return
     if bet > user.get_beans():
         await ctx.send(f"You don't have enough beans! Balance: {int(user.get_beans())}")

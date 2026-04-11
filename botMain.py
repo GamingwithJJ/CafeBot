@@ -216,6 +216,9 @@ COMMAND_MODULES = {
             ("`.marry <user>`", "Send a marriage proposal to another user. If they also use `.marry` on you, you are automatically wed. Both users must currently be single", "any"),
             ("`.divorce <user>`", "Divorce one of your partners. This immediately severs the bond for both of you", "any"),
             ("`.partner`", "View your marriage certificate, showing your partner and how long you've been together. Also shows any children you and your partner have both adopted", "any"),
+            ("`.adopt <user>`", "Send an adoption request to another user. If they also use `.adopt` on you, the adoption is confirmed. You can adopt as many people as you want", "any"),
+            ("`.unadopt <user>`", "Dissolve an adoption relationship. Either the parent or child can run this", "any"),
+            ("`.family`", "View your adopted family: who adopted you (if anyone) and all your adopted children", "any"),
             ("`.marriage_top`", "See the top 10 longest-running marriages in the server, sorted by how long ago they were formed", "any"),
             ("`.duel <user>`", "Start a turn-based duel against another user. Both combatants begin with 100 HP. Each round, both roll a d20 and deal that much damage — last one standing wins. You can also challenge the bot (good luck)", "any"),
             ("`.quote`", "Display a single random quote from the quote database", "any"),
@@ -244,7 +247,9 @@ COMMAND_MODULES = {
             ("`.tip <@user> <amount>`", "Send some of your Coffee Beans to another user. You cannot tip yourself or bots, and you must have enough beans to cover the amount", "any"),
             ("`.bean_top`", "See the top 10 richest users in the server by Coffee Bean balance", "any"),
             ("`.daily`", "Claim your daily Coffee Bean reward (base: 100 beans). Your streak grows by 1 each consecutive day you claim, adding +2% to your reward per streak day. Missing more than 48 hours resets your streak. 24-hour cooldown", "any"),
-            ("`.cafe_status`", "Show a server-wide snapshot: beans in circulation, registered users, active marriages, and total quotes", "any")
+            ("`.cafe_status`", "Show a server-wide snapshot: beans in circulation, registered users, active marriages, and total quotes", "any"),
+            ("`.slots <bet>`", "Spin a 3-reel slot machine. Minimum bet 50 beans. Triple 7s pays 230×, three of a kind pays 25×, two of a kind returns your bet. No match loses your bet", "any"),
+            ("`.blackjack <bet>`", "Play blackjack against the dealer. Minimum bet 20 beans. Use the Hit and Stand buttons to play. Blackjack on deal pays 1.5×, a win pays 1×, push returns your bet", "any")
         ]
     },
     "Faith": {
@@ -294,13 +299,7 @@ COMMAND_MODULES = {
     "Testing": {
         "description": "Commands currently in testing — bot admins only.",
         "emoji": "🧪",
-        "commands": [
-            ("`.adopt <user>`", "Send an adoption request to another user. If they also use `.adopt` on you, the adoption is confirmed. You can adopt as many people as you want", "bot_admin"),
-            ("`.unadopt <user>`", "Dissolve an adoption relationship. Either the parent or child can run this", "bot_admin"),
-            ("`.family`", "View your adopted family: who adopted you (if anyone) and all your adopted children", "bot_admin"),
-            ("`.slots <bet>`", "Spin a 3-reel slot machine. Three 7s pays 20×, three of a kind pays 5×, two of a kind pays 1.5×. No match loses your bet", "bot_admin"),
-            ("`.blackjack <bet>`", "Play blackjack against the dealer. Use the Hit and Stand buttons to play. Blackjack on deal pays 1.5×, a win pays 1×, push returns your bet", "bot_admin")
-        ]
+        "commands": []
     }
 }
 
@@ -495,19 +494,19 @@ async def divorce(ctx, target_user: discord.Member):
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("any")
 async def adopt(ctx, target_user: discord.Member):
     await FunModule.adopt(ctx, target_user)
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("any")
 async def unadopt(ctx, target_user: discord.Member):
     await FunModule.unadopt(ctx, target_user)
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("any")
 async def family(ctx):
     await FunModule.family(ctx)
 
@@ -881,13 +880,13 @@ async def daily(ctx):
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("any")
 async def slots(ctx, bet: int):
     await EconomyModule.slots(ctx, bet)
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("any")
 async def blackjack(ctx, bet: int):
     await EconomyModule.blackjack(ctx, bet)
 
@@ -1414,21 +1413,21 @@ async def slash_marriage_top(interaction: discord.Interaction):
 
 @bot.tree.command(name="adopt", description="Send or confirm an adoption request")
 async def slash_adopt(interaction: discord.Interaction, target_user: discord.Member):
-    if not await slash_auth_check(interaction, "bot_admin"): return
+    if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await FunModule.adopt(ctx, target_user)
 
 
 @bot.tree.command(name="unadopt", description="Dissolve an adoption relationship")
 async def slash_unadopt(interaction: discord.Interaction, target_user: discord.Member):
-    if not await slash_auth_check(interaction, "bot_admin"): return
+    if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await FunModule.unadopt(ctx, target_user)
 
 
 @bot.tree.command(name="family", description="View your adopted family")
 async def slash_family(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "bot_admin"): return
+    if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await FunModule.family(ctx)
 
@@ -1843,14 +1842,14 @@ async def slash_cafe_status(interaction: discord.Interaction):
 
 @bot.tree.command(name="slots", description="Spin the slot machine and bet your Coffee Beans")
 async def slash_slots(interaction: discord.Interaction, bet: int):
-    if not await slash_auth_check(interaction, "bot_admin"): return
+    if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await EconomyModule.slots(ctx, bet)
 
 
 @bot.tree.command(name="blackjack", description="Play blackjack against the dealer and bet your Coffee Beans")
 async def slash_blackjack(interaction: discord.Interaction, bet: int):
-    if not await slash_auth_check(interaction, "bot_admin"): return
+    if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await EconomyModule.blackjack(ctx, bet)
 

@@ -85,23 +85,27 @@ async def adopt(ctx, member):
         await ctx.send("You have already adopted this person!")
         return
 
+    if target_id in author_data.get_adopted_by():
+        await ctx.send("You can't adopt someone who has already adopted you!")
+        return
+
     if target_data.get_request("adoption", author_id) is not None:
         await ctx.send("You have already sent an adoption request to this user!")
         return
 
     request_to_send = Request("adoption", author_id)
     target_data.add_request("adoption", request_to_send)
-    await ctx.send(f"Sent adoption request to {member.mention}.")
 
-    # If the target already sent an adoption request to the author, complete the adoption
     if author_data.get_request("adoption", target_id) is not None:
         author_data.remove_request_by_data("adoption", target_id)
         target_data.remove_request(request_to_send)
         author_data.add_adopted_child(target_id)
         target_data.add_adopted_parent(author_id)
+        DataStorage.save_user_data()
         await ctx.send(f"Adoption complete! {member.mention} is now your child! 👨‍👧")
-
-    DataStorage.save_user_data()
+    else:
+        DataStorage.save_user_data()
+        await ctx.send(f"Sent adoption request to {member.mention}.")
 
 
 async def unadopt(ctx, member):
