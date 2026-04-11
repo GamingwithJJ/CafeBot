@@ -21,14 +21,19 @@ class User:
         self.discord_id = discord_id
         self.characters = []
         self.requests = {
-            "marriage": []
+            "marriage": [],
+            "adoption": []
         }
-        self.marriage_partner = None
-        self.partner_gained_date = None
+        self.marriage_partner = []        # list of int Discord IDs
+        self.partner_gained_date = {}     # dict: partner_id (int) → datetime
         self.beans = 0.0
         self.last_shift = None
         self.last_daily = None
         self.daily_reward_streak = 0
+
+        # Adoption
+        self.adopted_children = []  # List of int Discord IDs
+        self.adopted_by = []  # List of int Discord IDs (parents)
 
         #Trivia
         self.enabled_trivia_categories = []
@@ -40,15 +45,42 @@ class User:
         # Moderation
         self.warnings = []  # List of {"reason": str, "issued_by": str, "timestamp": str}
 
-    def set_marriage_partner(self, new_partner: int):
-        self.marriage_partner = new_partner
-        self.partner_gained_date = datetime.datetime.now()
+    def add_adopted_child(self, child_id: int):
+        self.adopted_children.append(child_id)
 
-    def get_marriage_partner(self):
+    def remove_adopted_child(self, child_id: int):
+        if child_id in self.adopted_children:
+            self.adopted_children.remove(child_id)
+
+    def get_adopted_children(self):
+        return self.adopted_children
+
+    def add_adopted_parent(self, parent_id: int):
+        if parent_id not in self.adopted_by:
+            self.adopted_by.append(parent_id)
+
+    def remove_adopted_parent(self, parent_id: int):
+        if parent_id in self.adopted_by:
+            self.adopted_by.remove(parent_id)
+
+    def get_adopted_by(self):
+        return self.adopted_by
+
+    def add_marriage_partner(self, partner_id: int):
+        if partner_id not in self.marriage_partner:
+            self.marriage_partner.append(partner_id)
+            self.partner_gained_date[partner_id] = datetime.datetime.now()
+
+    def remove_marriage_partner(self, partner_id: int):
+        if partner_id in self.marriage_partner:
+            self.marriage_partner.remove(partner_id)
+            self.partner_gained_date.pop(partner_id, None)
+
+    def get_marriage_partners(self):
         return self.marriage_partner
 
-    def get_partner_gained_date(self):
-        return self.partner_gained_date
+    def get_partner_gained_date(self, partner_id: int):
+        return self.partner_gained_date.get(partner_id)
 
     def add_request(self, type, request: Request):
         self.requests[type].append(request)
@@ -144,9 +176,14 @@ class User:
                 for req_type, req_list in self.requests.items()
             },
             "marriage_partner": self.marriage_partner,
+            "partner_gained_date": {
+                str(pid): dt.isoformat()
+                for pid, dt in self.partner_gained_date.items()
+            },
+            "adopted_children": self.adopted_children,
+            "adopted_by": self.adopted_by,
             "beans": self.beans,
             "last_shift": self.last_shift.isoformat() if self.last_shift else None,
-            "partner_gained_date": self.partner_gained_date.isoformat() if self.partner_gained_date else None,
             "last_daily": self.last_daily.isoformat() if self.last_daily else None,
             "daily_reward_streak": self.daily_reward_streak,
             "enabled_trivia_categories" : self.enabled_trivia_categories,

@@ -9,9 +9,15 @@ async def add_gif(ctx, type: str, link: str):
     type = type.lower()
 
     try:
+        new_category = type not in DataStorage.gifs
+        if new_category:
+            DataStorage.gifs[type] = []
         DataStorage.gifs[type].append(link)
         DataStorage.save_gifs()
-        await ctx.send(f"Added the link to the list")
+        if new_category:
+            await ctx.send(f"Created new category `{type}` and added the link.")
+        else:
+            await ctx.send(f"Added the link to the list")
     except Exception as e:
         await ctx.send(f"There was an error, {e}")
 

@@ -24,12 +24,8 @@ async def marry(ctx, member):
         await ctx.send("You can't marry a bot!")
         return
 
-    if author_user_data.get_marriage_partner() is not None:
-        await ctx.send("You already have a partner!")
-        return
-
-    if target_user_data.get_marriage_partner() is not None:
-        await ctx.send("The user you are trying to marry already has a partner!")
+    if target_user_id in author_user_data.get_marriage_partners():
+        await ctx.send("You are already married to this person!")
         return
 
     if target_user_data.get_request("marriage", author_user_id) is not None:
@@ -46,35 +42,122 @@ async def marry(ctx, member):
         author_user_data.remove_request_by_data("marriage", target_user_id)
         target_user_data.remove_request(request_to_send)
         # Add the partners
-        author_user_data.set_marriage_partner(target_user_id)
-        target_user_data.set_marriage_partner(author_user_id)
+        author_user_data.add_marriage_partner(target_user_id)
+        target_user_data.add_marriage_partner(author_user_id)
         await ctx.send("You are both now married! Congratulations!")
 
     DataStorage.save_user_data() # Temorary. Saves the file every time.
 
 
-async def divorce(ctx):
+async def divorce(ctx, member):
     author_id = ctx.author.id
+    target_id = member.id
     author_data = get_or_create_user(author_id)
 
-    # Check if the user is actually married
-    partner_id = author_data.get_marriage_partner()
-
-    if partner_id is None:
-        await ctx.send("💔 You aren't currently married to anyone!")
+    if target_id not in author_data.get_marriage_partners():
+        await ctx.send("💔 You aren't married to that person!")
         return
 
-    # Get the partner's data
-    partner_data = get_or_create_user(partner_id)
-
-    # Break the bond (Set both to None)
-    author_data.set_marriage_partner(None)
-    partner_data.set_marriage_partner(None)
-
-    # Save the changes
+    partner_data = get_or_create_user(target_id)
+    author_data.remove_marriage_partner(target_id)
+    partner_data.remove_marriage_partner(author_id)
     DataStorage.save_user_data()
 
-    await ctx.send(f"📜 {ctx.author.mention} has divorced <@{partner_id}>. The papers have been signed.")
+    await ctx.send(f"📜 {ctx.author.mention} has divorced <@{target_id}>. The papers have been signed.")
+
+
+async def adopt(ctx, member):
+    author_id = ctx.author.id
+    target_id = member.id
+
+    if author_id == target_id:
+        await ctx.send("You can't adopt yourself!")
+        return
+
+    if member.bot:
+        await ctx.send("You can't adopt a bot!")
+        return
+
+    author_data = get_or_create_user(author_id)
+    target_data = get_or_create_user(target_id)
+
+    if target_id in author_data.get_adopted_children():
+        await ctx.send("You have already adopted this person!")
+        return
+
+    if target_data.get_request("adoption", author_id) is not None:
+        await ctx.send("You have already sent an adoption request to this user!")
+        return
+
+    request_to_send = Request("adoption", author_id)
+    target_data.add_request("adoption", request_to_send)
+    await ctx.send(f"Sent adoption request to {member.mention}.")
+
+    # If the target already sent an adoption request to the author, complete the adoption
+    if author_data.get_request("adoption", target_id) is not None:
+        author_data.remove_request_by_data("adoption", target_id)
+        target_data.remove_request(request_to_send)
+        author_data.add_adopted_child(target_id)
+        target_data.add_adopted_parent(author_id)
+        await ctx.send(f"Adoption complete! {member.mention} is now your child! 👨‍👧")
+
+    DataStorage.save_user_data()
+
+
+async def unadopt(ctx, member):
+    author_id = ctx.author.id
+    target_id = member.id
+
+    author_data = get_or_create_user(author_id)
+    target_data = get_or_create_user(target_id)
+
+    if target_id in author_data.get_adopted_children():
+        # Author is the parent
+        author_data.remove_adopted_child(target_id)
+        target_data.remove_adopted_parent(author_id)
+        DataStorage.save_user_data()
+        await ctx.send(f"📜 The adoption of {member.mention} has been dissolved.")
+    elif target_id in author_data.get_adopted_by():
+        # Author is the child
+        target_data.remove_adopted_child(author_id)
+        author_data.remove_adopted_parent(target_id)
+        DataStorage.save_user_data()
+        await ctx.send(f"📜 Your adoption by {member.mention} has been dissolved.")
+    else:
+        await ctx.send("You don't have an adoption relationship with that person.")
+
+
+async def family(ctx):
+    author_id = ctx.author.id
+    user_data = DataStorage.get_or_create_user(author_id)
+
+    parents = user_data.get_adopted_by()
+    children = user_data.get_adopted_children()
+
+    if not parents and not children:
+        embed = discord.Embed(
+            title="👨‍👩‍👧 No Family Found",
+            description="You haven't adopted anyone yet, and no one has adopted you!\nUse `.adopt @user` to start a family.",
+            color=discord.Color.light_gray()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    embed = discord.Embed(
+        title="👨‍👩‍👧 Your Family",
+        color=discord.Color.green()
+    )
+
+    if parents:
+        mentions = " ".join(f"<@{pid}>" for pid in parents)
+        embed.add_field(name=f"👴 Adopted By ({len(parents)})", value=mentions, inline=False)
+
+    if children:
+        mentions = " ".join(f"<@{cid}>" for cid in children)
+        embed.add_field(name=f"🧒 Children ({len(children)})", value=mentions, inline=False)
+
+    embed.set_footer(text="CafeBot Family Registry | ☕")
+    await ctx.send(embed=embed)
 
 
 async def duel(ctx, target: discord.Member):
@@ -167,10 +250,6 @@ async def quote(ctx):
 
 
 async def quotes(ctx, amount: int):
-    if amount > 5:
-        await ctx.send("You can only list 5 quotes at a time.")
-        return
-
     quotes_users = list(DataStorage.quotes.keys())
     if not quotes_users:
         await ctx.send("No quotes have been added yet!")
@@ -190,10 +269,6 @@ async def quotes(ctx, amount: int):
 
 async def quote_list(ctx, user: str, number):
     """Sorts quotes by a individual and only shows quotes which are sent by a certain individual."""
-    if number > 5:
-        await ctx.send("You can only send five quotes at a time.")
-        return
-
     user = user.lower().capitalize()
     if user not in DataStorage.quotes.keys():
         await ctx.send(f"{user} user is not a recognized quote user")
@@ -307,23 +382,20 @@ async def magic_eight_ball(ctx, question: str):
 
 
 async def partner(ctx):
-    """Lists your current partner and the time you've been together."""
+    """Lists your current partners and the time you've been together."""
     author_id = ctx.author.id
     user_data = DataStorage.get_or_create_user(author_id)
 
-    partner_id = user_data.get_marriage_partner()
+    partners = user_data.get_marriage_partners()
 
-    if not partner_id:
+    if not partners:
         embed = discord.Embed(
             title="💔 No Partner Found",
             description="You dont have a partner yet, Use .marry to propose!",
-            color = discord.Color.light_gray()
+            color=discord.Color.light_gray()
         )
         await ctx.send(embed=embed)
         return
-
-    # Get partners discord user object.
-    partner_user = ctx.bot.get_user(partner_id) or await ctx.bot.fetch_user(partner_id)
 
     embed = discord.Embed(
         title="💕 Marriage Certificate",
@@ -331,21 +403,30 @@ async def partner(ctx):
         color=discord.Color.fuchsia()
     )
 
-    embed.add_field(name="👤 User", value=ctx.author.mention, inline=True)
-    embed.add_field(name="💍 Partner", value=f"<@{partner_id}>", inline=True)
+    embed.add_field(name="👤 User", value=ctx.author.mention, inline=False)
 
-    marriage_date = user_data.get_partner_gained_date()
+    for pid in partners:
+        date = user_data.get_partner_gained_date(pid)
+        if date:
+            ts = int(date.timestamp())
+            date_str = f"<t:{ts}:D> (<t:{ts}:R>)"
+        else:
+            date_str = "A long, long time ago..."
+        embed.add_field(name="💍 Partner", value=f"<@{pid}>\n📅 {date_str}", inline=True)
 
-    if marriage_date:
-        timestamp = int(marriage_date.timestamp())
-        time_str = f"<t:{timestamp}:D> (<t:{timestamp}:R>)"
-    else:
-        time_str = "A long, long time ago..."
+    # Shared children: adopted by author AND at least one partner
+    all_partner_children = set()
+    for pid in partners:
+        pd = DataStorage.get_or_create_user(pid)
+        all_partner_children |= set(pd.get_adopted_children())
+    shared = set(user_data.get_adopted_children()) & all_partner_children
+    if shared:
+        embed.add_field(name="👨‍👩‍👧 Shared Children", value=" ".join(f"<@{cid}>" for cid in shared), inline=False)
 
-    embed.add_field(name="📅 Married Since", value=time_str, inline=False)
-
-    if partner_user:
-        embed.set_thumbnail(url=partner_user.display_avatar.url)
+    if len(partners) == 1:
+        partner_user = ctx.bot.get_user(partners[0]) or await ctx.bot.fetch_user(partners[0])
+        if partner_user:
+            embed.set_thumbnail(url=partner_user.display_avatar.url)
 
     embed.set_footer(
         text="CafeBot Love Registry | ☕💕",
@@ -359,34 +440,25 @@ async def marriage_top(ctx):
     """Lists the top 10 marriages ordered by length married"""
     user_saves = DataStorage.user_data
 
-    marriages = []
-    seen_users = set() #Store seen users, since we only need to store one user per marriage.
-
-    # Use a set to order the users, sorting by marriage length.
+    pairs = []
     for user_id, user in user_saves.items():
-        # Filter users who arent married, or have already been seen.
-        if not user.marriage_partner or user_id in seen_users:
-            continue
+        for pid in user.get_marriage_partners():
+            # Only emit each pair once by requiring user_id < str(pid)
+            if user_id < str(pid):
+                date = user.get_partner_gained_date(pid)
+                if date:
+                    pairs.append((user_id, pid, date))
 
-        # Add both partners to seen, and add the marriage to the list.
-        marriages.append(user)
-        seen_users.add(user_id)
-        seen_users.add(str(user.marriage_partner))
+    top_pairs = sorted(pairs, key=lambda x: x[2])[:10]
 
-        # Sort by marriage date
-    top_marriages = sorted(
-        [m for m in marriages if m.partner_gained_date],
-        key=lambda x: x.partner_gained_date
-    )[:10]
-
-    if not top_marriages:
+    if not top_pairs:
         await ctx.send("No marriages found in the registry! 💔")
         return
 
     description = ""
-    for i, user in enumerate(top_marriages):
-        timestamp = int(user.partner_gained_date.timestamp())
-        description += f"{i + 1}. <@{user.discord_id}> & <@{user.marriage_partner}> — <t:{timestamp}:R>\n"
+    for i, (uid, pid, date) in enumerate(top_pairs):
+        timestamp = int(date.timestamp())
+        description += f"{i + 1}. <@{uid}> & <@{pid}> — <t:{timestamp}:R>\n"
 
     embed = discord.Embed(
         title="🏆 Top 10 Longest Marriages",
@@ -442,9 +514,9 @@ async def profile(ctx):
     author_id = ctx.author.id
     user_data = DataStorage.get_or_create_user(author_id)
 
-    partner_id = user_data.get_marriage_partner()
-    if partner_id:
-        partner_display = f"<@{partner_id}>"
+    partners = user_data.get_marriage_partners()
+    if partners:
+        partner_display = " ".join(f"<@{pid}>" for pid in partners)
     else:
         partner_display = "Single 💔"
 

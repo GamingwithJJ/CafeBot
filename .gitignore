@@ -27,3 +27,6 @@ ffmpeg.exe
 
 # OS generated files
 .DS_Store
+
+# Claude Code
+.claude/

@@ -214,8 +214,8 @@ COMMAND_MODULES = {
         "emoji": "💕",
         "commands": [
             ("`.marry <user>`", "Send a marriage proposal to another user. If they also use `.marry` on you, you are automatically wed. Both users must currently be single", "any"),
-            ("`.divorce`", "End your current marriage. This immediately severs the bond for both partners", "any"),
-            ("`.partner`", "View your marriage certificate, showing your partner and how long you've been together", "any"),
+            ("`.divorce <user>`", "Divorce one of your partners. This immediately severs the bond for both of you", "any"),
+            ("`.partner`", "View your marriage certificate, showing your partner and how long you've been together. Also shows any children you and your partner have both adopted", "any"),
             ("`.marriage_top`", "See the top 10 longest-running marriages in the server, sorted by how long ago they were formed", "any"),
             ("`.duel <user>`", "Start a turn-based duel against another user. Both combatants begin with 100 HP. Each round, both roll a d20 and deal that much damage — last one standing wins. You can also challenge the bot (good luck)", "any"),
             ("`.quote`", "Display a single random quote from the quote database", "any"),
@@ -232,7 +232,7 @@ COMMAND_MODULES = {
             ("`.trivia_config`", "Open an interactive dropdown menu to choose which trivia categories appear in your games", "any"),
             ("`.quick_trivia [category]`", "Ask a single trivia question — no session required. First correct answer wins 10 beans. Optionally specify a category (e.g. `animals`, `history`)", "any"),
             ("`.trivia_stats`", "View your personal trivia stats: total correct answers and your enabled categories", "any"),
-            ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.purge` `.throw` `.mock` `.yoink` `.grip`\n**Affectionate:** `.kiss` `.smooch` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill` `.wink` `.salute` `.snap`\n**Reactions:** `.stare` `.shocked` `.popcorn` `.frog`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode` `.stub_toe`", "any")
+            ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.purge` `.throw` `.mock` `.yoink` `.grip`\n**Affectionate:** `.kiss` `.smooch` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill` `.wink` `.salute` `.snap` `.thanks`\n**Reactions:** `.stare` `.shocked` `.popcorn` `.frog`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode` `.stub_toe`", "any")
         ]
     },
     "Economy": {
@@ -289,6 +289,17 @@ COMMAND_MODULES = {
             ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin"),
             ("`.remove_trivia <category> <sub_category> <question>`", "Remove a question from the trivia bank by its exact text. Wrap fields containing spaces in quotes.", "bot_admin"),
             ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin")
+        ]
+    },
+    "Testing": {
+        "description": "Commands currently in testing — bot admins only.",
+        "emoji": "🧪",
+        "commands": [
+            ("`.adopt <user>`", "Send an adoption request to another user. If they also use `.adopt` on you, the adoption is confirmed. You can adopt as many people as you want", "bot_admin"),
+            ("`.unadopt <user>`", "Dissolve an adoption relationship. Either the parent or child can run this", "bot_admin"),
+            ("`.family`", "View your adopted family: who adopted you (if anyone) and all your adopted children", "bot_admin"),
+            ("`.slots <bet>`", "Spin a 3-reel slot machine. Three 7s pays 20×, three of a kind pays 5×, two of a kind pays 1.5×. No match loses your bet", "bot_admin"),
+            ("`.blackjack <bet>`", "Play blackjack against the dealer. Use the Hit and Stand buttons to play. Blackjack on deal pays 1.5×, a win pays 1×, push returns your bet", "bot_admin")
         ]
     }
 }
@@ -479,8 +490,26 @@ async def marry(ctx, target_user: discord.Member):
 
 @bot.command()
 @is_authorized("any")
-async def divorce(ctx):
-    await FunModule.divorce(ctx)
+async def divorce(ctx, target_user: discord.Member):
+    await FunModule.divorce(ctx, target_user)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def adopt(ctx, target_user: discord.Member):
+    await FunModule.adopt(ctx, target_user)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def unadopt(ctx, target_user: discord.Member):
+    await FunModule.unadopt(ctx, target_user)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def family(ctx):
+    await FunModule.family(ctx)
 
 
 @bot.command()
@@ -724,6 +753,12 @@ async def frog(ctx, target: discord.Member = None):
     await FunModule.gif(ctx, "frog", target)
 
 
+@bot.command()
+@is_authorized("any")
+async def thanks(ctx, target: discord.Member = None):
+    await FunModule.gif(ctx, "thanks", target)
+
+
 
 @bot.command()
 @is_authorized("any")
@@ -788,6 +823,9 @@ async def cafe_status(ctx):
 @bot.command()
 @is_authorized("any")
 async def quote_list(ctx, user: str, amount: int = 1):
+    if amount > 5 and not check_cmd_permission(ctx, "server_admin"):
+        await ctx.send("You can only send five quotes at a time.")
+        return
     await FunModule.quote_list(ctx, user, amount)
 
 
@@ -824,6 +862,9 @@ async def profile(ctx):
 @bot.command()
 @is_authorized("any")
 async def quotes(ctx, amount: int):
+    if amount > 5 and not check_cmd_permission(ctx, "server_admin"):
+        await ctx.send("You can only list 5 quotes at a time.")
+        return
     await FunModule.quotes(ctx, amount)
 
 
@@ -837,6 +878,18 @@ async def coinflip(ctx):
 @is_authorized("any")
 async def daily(ctx):
     await EconomyModule.daily(ctx)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def slots(ctx, bet: int):
+    await EconomyModule.slots(ctx, bet)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def blackjack(ctx, bet: int):
+    await EconomyModule.blackjack(ctx, bet)
 
 
 @bot.command()
@@ -1338,11 +1391,11 @@ async def slash_marry(interaction: discord.Interaction, target_user: discord.Mem
     await FunModule.marry(ctx, target_user)
 
 
-@bot.tree.command(name="divorce", description="End your current marriage")
-async def slash_divorce(interaction: discord.Interaction):
+@bot.tree.command(name="divorce", description="Divorce one of your partners")
+async def slash_divorce(interaction: discord.Interaction, target_user: discord.Member):
     if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
-    await FunModule.divorce(ctx)
+    await FunModule.divorce(ctx, target_user)
 
 
 @bot.tree.command(name="partner", description="View your marriage certificate")
@@ -1357,6 +1410,27 @@ async def slash_marriage_top(interaction: discord.Interaction):
     if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await FunModule.marriage_top(ctx)
+
+
+@bot.tree.command(name="adopt", description="Send or confirm an adoption request")
+async def slash_adopt(interaction: discord.Interaction, target_user: discord.Member):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.adopt(ctx, target_user)
+
+
+@bot.tree.command(name="unadopt", description="Dissolve an adoption relationship")
+async def slash_unadopt(interaction: discord.Interaction, target_user: discord.Member):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.unadopt(ctx, target_user)
+
+
+@bot.tree.command(name="family", description="View your adopted family")
+async def slash_family(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.family(ctx)
 
 
 @bot.tree.command(name="duel", description="Start a turn-based duel against another user")
@@ -1378,6 +1452,9 @@ async def slash_quote(interaction: discord.Interaction):
 @bot.tree.command(name="quotes", description="Display multiple random quotes at once (max 5)")
 async def slash_quotes(interaction: discord.Interaction, amount: int):
     if not await slash_auth_check(interaction, "any"): return
+    if amount > 5 and not await is_authorized_interaction(interaction, "server_admin"):
+        await interaction.response.send_message("You can only list 5 quotes at a time.", ephemeral=True)
+        return
     ctx = InteractionContext(interaction)
     await FunModule.quotes(ctx, amount)
 
@@ -1385,6 +1462,9 @@ async def slash_quotes(interaction: discord.Interaction, amount: int):
 @bot.tree.command(name="quote_list", description="Display random quotes from a specific person")
 async def slash_quote_list(interaction: discord.Interaction, user: str, amount: int = 1):
     if not await slash_auth_check(interaction, "any"): return
+    if amount > 5 and not await is_authorized_interaction(interaction, "server_admin"):
+        await interaction.response.send_message("You can only send five quotes at a time.", ephemeral=True)
+        return
     ctx = InteractionContext(interaction)
     await FunModule.quote_list(ctx, user, amount)
 
@@ -1709,6 +1789,13 @@ async def slash_frog(interaction: discord.Interaction, target: Optional[discord.
     await FunModule.gif(ctx, "frog", target)
 
 
+@bot.tree.command(name="thanks", description="Thank someone")
+async def slash_thanks(interaction: discord.Interaction, target: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.gif(ctx, "thanks", target)
+
+
 
 # --- Economy ---
 
@@ -1752,6 +1839,20 @@ async def slash_cafe_status(interaction: discord.Interaction):
     if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await EconomyModule.cafe_status(ctx)
+
+
+@bot.tree.command(name="slots", description="Spin the slot machine and bet your Coffee Beans")
+async def slash_slots(interaction: discord.Interaction, bet: int):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.slots(ctx, bet)
+
+
+@bot.tree.command(name="blackjack", description="Play blackjack against the dealer and bet your Coffee Beans")
+async def slash_blackjack(interaction: discord.Interaction, bet: int):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.blackjack(ctx, bet)
 
 
 # --- Faith ---

@@ -264,12 +264,31 @@ def load_user_data():
 
         for user_id, user_dict in loaded_data.items():
             user = User(user_dict["discord_id"])
-            user.marriage_partner = user_dict.get("marriage_partner", None)
+            raw_mp = user_dict.get("marriage_partner", [])
+            if raw_mp is None:
+                user.marriage_partner = []
+            elif isinstance(raw_mp, int):
+                user.marriage_partner = [raw_mp]
+            else:
+                user.marriage_partner = raw_mp
+
+            raw_pgd = user_dict.get("partner_gained_date", {})
+            if raw_pgd is None:
+                user.partner_gained_date = {}
+            elif isinstance(raw_pgd, str):
+                dt = datetime.datetime.fromisoformat(raw_pgd)
+                user.partner_gained_date = {user.marriage_partner[0]: dt} if user.marriage_partner else {}
+            elif isinstance(raw_pgd, dict):
+                user.partner_gained_date = {
+                    int(k): datetime.datetime.fromisoformat(v)
+                    for k, v in raw_pgd.items()
+                }
+            else:
+                user.partner_gained_date = {}
+
             user.beans = user_dict.get("beans", 0)
             last_shift_string = user_dict.get("last_shift")
             user.last_shift = datetime.datetime.fromisoformat(last_shift_string) if last_shift_string else None
-            partner_gained_date_string = user_dict.get("partner_gained_date")
-            user.partner_gained_date = datetime.datetime.fromisoformat(partner_gained_date_string) if partner_gained_date_string else None
             last_daily_string = user_dict.get("last_daily")
             user.last_daily = datetime.datetime.fromisoformat(last_daily_string) if last_daily_string else None
             user.daily_reward_streak = user_dict.get("daily_reward_streak", 0)
@@ -277,6 +296,14 @@ def load_user_data():
             user.trivia_correct = user_dict.get("trivia_correct", 0)
             user.bookmarked_verses = user_dict.get("bookmarked_verses", [])
             user.warnings = user_dict.get("warnings", [])
+            user.adopted_children = user_dict.get("adopted_children", [])
+            raw_adopted_by = user_dict.get("adopted_by", [])
+            if raw_adopted_by is None:
+                user.adopted_by = []
+            elif isinstance(raw_adopted_by, int):
+                user.adopted_by = [raw_adopted_by]  # migrate old single-value saves
+            else:
+                user.adopted_by = raw_adopted_by
 
             # Rebuild DndCharacter objects
             for char_data in user_dict.get("characters", []):
