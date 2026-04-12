@@ -30,6 +30,8 @@ class User:
         self.last_shift = None
         self.last_daily = None
         self.daily_reward_streak = 0
+        self.total_marriages = 0
+        self.total_divorces = 0
 
         # Adoption
         self.adopted_children = []  # List of int Discord IDs
@@ -70,11 +72,13 @@ class User:
         if partner_id not in self.marriage_partner:
             self.marriage_partner.append(partner_id)
             self.partner_gained_date[partner_id] = datetime.datetime.now()
+            self.total_marriages += 1
 
     def remove_marriage_partner(self, partner_id: int):
         if partner_id in self.marriage_partner:
             self.marriage_partner.remove(partner_id)
             self.partner_gained_date.pop(partner_id, None)
+            self.total_divorces += 1
 
     def get_marriage_partners(self):
         return self.marriage_partner
@@ -186,6 +190,8 @@ class User:
             "last_shift": self.last_shift.isoformat() if self.last_shift else None,
             "last_daily": self.last_daily.isoformat() if self.last_daily else None,
             "daily_reward_streak": self.daily_reward_streak,
+            "total_marriages": self.total_marriages,
+            "total_divorces": self.total_divorces,
             "enabled_trivia_categories" : self.enabled_trivia_categories,
             "trivia_correct": self.trivia_correct,
             "bookmarked_verses": self.bookmarked_verses,

@@ -192,6 +192,87 @@ async def remove_trivia(ctx, category: str, sub_category: str, question: str):
     await ctx.send("Could not find a question matching that text.")
 
 
+async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
+    """Force two users into a marriage without mutual consent."""
+    if user1.id == user2.id:
+        await ctx.send("❌ You can't marry a user to themselves.")
+        return
+    if user1.bot or user2.bot:
+        await ctx.send("❌ Can't force-marry a bot.")
+        return
+
+    user1_data = DataStorage.get_or_create_user(user1.id)
+    user2_data = DataStorage.get_or_create_user(user2.id)
+
+    if user2.id in user1_data.get_marriage_partners():
+        await ctx.send("❌ These users are already married to each other.")
+        return
+
+    user1_data.add_marriage_partner(user2.id)
+    user2_data.add_marriage_partner(user1.id)
+    DataStorage.save_user_data()
+    await ctx.send(f"💍 {user1.mention} and {user2.mention} have been force-married.")
+
+
+async def force_divorce(ctx, user1: discord.Member, user2: discord.Member):
+    """Force dissolve a marriage between two users."""
+    user1_data = DataStorage.get_or_create_user(user1.id)
+    user2_data = DataStorage.get_or_create_user(user2.id)
+
+    if user2.id not in user1_data.get_marriage_partners():
+        await ctx.send("❌ These users are not married to each other.")
+        return
+
+    user1_data.remove_marriage_partner(user2.id)
+    user2_data.remove_marriage_partner(user1.id)
+    DataStorage.save_user_data()
+    await ctx.send(f"📜 {user1.mention} and {user2.mention} have been force-divorced.")
+
+
+async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Member):
+    """Force an adoption relationship between two users."""
+    if parent_user.id == child_user.id:
+        await ctx.send("❌ A user can't adopt themselves.")
+        return
+    if parent_user.bot or child_user.bot:
+        await ctx.send("❌ Can't force-adopt a bot.")
+        return
+
+    parent_data = DataStorage.get_or_create_user(parent_user.id)
+    child_data = DataStorage.get_or_create_user(child_user.id)
+
+    if child_user.id in parent_data.get_adopted_children():
+        await ctx.send("❌ This adoption relationship already exists.")
+        return
+    if child_user.id in parent_data.get_adopted_by():
+        await ctx.send("❌ Can't adopt someone who has already adopted you.")
+        return
+
+    parent_data.add_adopted_child(child_user.id)
+    child_data.add_adopted_parent(parent_user.id)
+    DataStorage.save_user_data()
+    await ctx.send(f"👨‍👧 {parent_user.mention} has been made the parent of {child_user.mention}.")
+
+
+async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
+    """Force dissolve an adoption relationship between two users."""
+    user1_data = DataStorage.get_or_create_user(user1.id)
+    user2_data = DataStorage.get_or_create_user(user2.id)
+
+    if user2.id in user1_data.get_adopted_children():
+        user1_data.remove_adopted_child(user2.id)
+        user2_data.remove_adopted_parent(user1.id)
+        DataStorage.save_user_data()
+        await ctx.send(f"📜 Adoption dissolved: {user1.mention} is no longer the parent of {user2.mention}.")
+    elif user2.id in user1_data.get_adopted_by():
+        user2_data.remove_adopted_child(user1.id)
+        user1_data.remove_adopted_parent(user2.id)
+        DataStorage.save_user_data()
+        await ctx.send(f"📜 Adoption dissolved: {user2.mention} is no longer the parent of {user1.mention}.")
+    else:
+        await ctx.send("❌ These users don't have an adoption relationship.")
+
+
 async def admin_tip(ctx, target: discord.Member, amount: float):
     """Grants a user beans without requiring the admin to have funds."""
     if amount == 0:

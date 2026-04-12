@@ -99,10 +99,10 @@ async def adopt(ctx, member):
     if author_data.get_request("adoption", target_id) is not None:
         author_data.remove_request_by_data("adoption", target_id)
         target_data.remove_request(request_to_send)
-        author_data.add_adopted_child(target_id)
-        target_data.add_adopted_parent(author_id)
+        target_data.add_adopted_child(author_id)
+        author_data.add_adopted_parent(target_id)
         DataStorage.save_user_data()
-        await ctx.send(f"Adoption complete! {member.mention} is now your child! 👨‍👧")
+        await ctx.send(f"Adoption complete! You have been adopted by {member.mention}! 👨‍👧")
     else:
         DataStorage.save_user_data()
         await ctx.send(f"Sent adoption request to {member.mention}.")
@@ -537,6 +537,8 @@ async def profile(ctx):
     embed.add_field(name="🎙️ Quotes in DB", value=str(quote_count), inline=True)
     embed.add_field(name="⚔️ D&D Characters", value=str(len(user_data.characters)), inline=True)
     embed.add_field(name="📅 Daily Streak", value=f"{user_data.daily_reward_streak} days", inline=True)
+    embed.add_field(name="💍 Total Marriages", value=str(user_data.total_marriages), inline=True)
+    embed.add_field(name="💔 Total Divorces", value=str(user_data.total_divorces), inline=True)
     embed.add_field(name="🧠 Trivia Wins", value=str(user_data.trivia_correct), inline=True)
     embed.add_field(name="📖 Bookmarked Verses", value=str(len(user_data.bookmarked_verses)), inline=True)
     embed.set_footer(text="CafeBot Profile | ☕")

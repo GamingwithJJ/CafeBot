@@ -1,7 +1,46 @@
 import discord
 import asyncio
 import random
+import re
+import difflib
 import DataStorage
+
+
+def _normalize(s: str) -> str:
+    s = s.lower()
+    s = re.sub(r"[^\w\s]", "", s)
+    s = " ".join(s.split())
+    return s
+
+
+def is_correct_answer(msg_content: str, acceptable_answers: list) -> bool:
+    normalized_msg = _normalize(msg_content)
+    msg_words = normalized_msg.split()
+
+    for answer in acceptable_answers:
+        norm_answer = _normalize(answer)
+        answer_words = norm_answer.split()
+        window_size = len(answer_words)
+
+        # Single-word answer: whole-word token match (prevents "6" matching "16")
+        # Multi-word answer: phrase substring match
+        if window_size == 1:
+            if norm_answer in msg_words:
+                return True
+        else:
+            if norm_answer in normalized_msg:
+                return True
+
+        # Fuzzy match — skip for purely numeric answers (years, counts, etc.)
+        is_numeric = norm_answer.replace(" ", "").isdigit()
+        if len(norm_answer) >= 4 and not is_numeric:
+            for i in range(max(1, len(msg_words) - window_size + 1)):
+                window = " ".join(msg_words[i : i + window_size])
+                ratio = difflib.SequenceMatcher(None, norm_answer, window).ratio()
+                if ratio >= 0.82:
+                    return True
+
+    return False
 
 
 active_trivia_channels = []  # List of channel id's currently with ongoing trivia
@@ -111,7 +150,7 @@ async def start_session(ctx, rounds: int, user_data):
                         raise asyncio.TimeoutError
                     msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
 
-                    if any(answer in msg.content.lower() for answer in acceptable_answers):
+                    if is_correct_answer(msg.content, acceptable_answers):
                         official_answer = acceptable_answers[0].capitalize()
                         await ctx.send(
                             f"✅ **{msg.author.display_name}** got it right! The answer was: {official_answer}")
@@ -198,7 +237,7 @@ async def quick_trivia(ctx, user_data, category: str = None):
             if remaining <= 0:
                 raise asyncio.TimeoutError
             msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
-            if any(answer in msg.content.lower() for answer in acceptable_answers):
+            if is_correct_answer(msg.content, acceptable_answers):
                 official_answer = acceptable_answers[0].capitalize()
                 winner_data = DataStorage.get_or_create_user(msg.author.id)
                 winner_data.trivia_correct += 1

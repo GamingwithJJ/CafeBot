@@ -293,7 +293,11 @@ COMMAND_MODULES = {
             ("`.remove_eight_ball <response>`", "Remove a response from the Magic 8-Ball's answer pool by its exact text", "bot_admin"),
             ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin"),
             ("`.remove_trivia <category> <sub_category> <question>`", "Remove a question from the trivia bank by its exact text. Wrap fields containing spaces in quotes.", "bot_admin"),
-            ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin")
+            ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin"),
+            ("`.force_marry <user1> <user2>`", "Force two users into a marriage without mutual consent", "bot_admin"),
+            ("`.force_divorce <user1> <user2>`", "Force dissolve a marriage between two users", "bot_admin"),
+            ("`.force_adopt <parent> <child>`", "Force an adoption relationship — first user becomes the parent", "bot_admin"),
+            ("`.force_unadopt <user1> <user2>`", "Force dissolve an adoption relationship between two users (order doesn't matter)", "bot_admin")
         ]
     },
     "Testing": {
@@ -1041,6 +1045,30 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
     Grants beans to a user without requiring the admin to have funds.
     """
     await BotAdminModule.admin_tip(ctx, target, amount)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
+    await BotAdminModule.force_marry(ctx, user1, user2)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def force_divorce(ctx, user1: discord.Member, user2: discord.Member):
+    await BotAdminModule.force_divorce(ctx, user1, user2)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Member):
+    await BotAdminModule.force_adopt(ctx, parent_user, child_user)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
+    await BotAdminModule.force_unadopt(ctx, user1, user2)
 
 
 @bot.command()
@@ -1983,6 +2011,36 @@ async def slash_leave(interaction: discord.Interaction):
     if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await MusicModule.leave_channel(ctx)
+
+
+# --- Admin Force Commands ---
+
+@bot.tree.command(name="force_marry", description="Force two users into a marriage")
+async def slash_force_marry(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.force_marry(ctx, user1, user2)
+
+
+@bot.tree.command(name="force_divorce", description="Force dissolve a marriage between two users")
+async def slash_force_divorce(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.force_divorce(ctx, user1, user2)
+
+
+@bot.tree.command(name="force_adopt", description="Force an adoption — first user becomes the parent")
+async def slash_force_adopt(interaction: discord.Interaction, parent_user: discord.Member, child_user: discord.Member):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.force_adopt(ctx, parent_user, child_user)
+
+
+@bot.tree.command(name="force_unadopt", description="Force dissolve an adoption relationship between two users")
+async def slash_force_unadopt(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await BotAdminModule.force_unadopt(ctx, user1, user2)
 
 
 bot.run(token)

@@ -292,6 +292,8 @@ def load_user_data():
             last_daily_string = user_dict.get("last_daily")
             user.last_daily = datetime.datetime.fromisoformat(last_daily_string) if last_daily_string else None
             user.daily_reward_streak = user_dict.get("daily_reward_streak", 0)
+            user.total_marriages = user_dict.get("total_marriages", 0)
+            user.total_divorces = user_dict.get("total_divorces", 0)
             user.enabled_trivia_categories = user_dict.get("enabled_trivia_categories", [])
             user.trivia_correct = user_dict.get("trivia_correct", 0)
             user.bookmarked_verses = user_dict.get("bookmarked_verses", [])
