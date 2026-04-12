@@ -43,6 +43,27 @@ def is_correct_answer(msg_content: str, acceptable_answers: list) -> bool:
     return False
 
 
+def get_question_timeout(question_text: str, acceptable_answers: list) -> int:
+    # Answer length determines question time in tiers
+    q_words = len(question_text.split())
+    if q_words <= 10:
+        base = 15
+    elif q_words <= 20:
+        base = 20
+    else:
+        base = 30
+
+    # Answer length can add to the question time
+    min_answer_words = min(len(a.split()) for a in acceptable_answers)
+    if min_answer_words >= 7:
+        bonus = 10
+    elif min_answer_words >= 4:
+        bonus = 5
+    else:
+        bonus = 0
+
+    return base + bonus
+
 active_trivia_channels = []  # List of channel id's currently with ongoing trivia
 
 
@@ -131,19 +152,21 @@ async def start_session(ctx, rounds: int, user_data):
             sub_category, question_text, acceptable_answers = chosen_item
             available_questions.remove(chosen_item)
 
+            timeout = get_question_timeout(question_text, acceptable_answers)
+
             embed = discord.Embed(
                 title=f"Round {round_num} of {rounds}",
                 description=f"**{question_text}**",
                 color=discord.Color.blue()
             )
-            embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 20 seconds to answer!")
+            embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have {timeout} seconds to answer!")
             await ctx.send(embed=embed)
 
             def check(m):
                 return m.channel == ctx.channel and not m.author.bot
 
             try:
-                deadline = asyncio.get_event_loop().time() + 20.0
+                deadline = asyncio.get_event_loop().time() + timeout
                 while True:
                     remaining = deadline - asyncio.get_event_loop().time()
                     if remaining <= 0:
@@ -219,19 +242,21 @@ async def quick_trivia(ctx, user_data, category: str = None):
 
     sub_category, question_text, acceptable_answers = random.choice(available_questions)
 
+    timeout = get_question_timeout(question_text, acceptable_answers)
+
     embed = discord.Embed(
         title=f"🧠 Quick Trivia! (Category: {category})",
         description=f"**{question_text}**",
         color=discord.Color.blue()
     )
-    embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 20 seconds to answer! First correct answer wins 10 beans.")
+    embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have {timeout} seconds to answer! First correct answer wins 10 beans.")
     await ctx.send(embed=embed)
 
     def check(m):
         return m.channel == ctx.channel and not m.author.bot
 
     try:
-        deadline = asyncio.get_event_loop().time() + 20.0
+        deadline = asyncio.get_event_loop().time() + timeout
         while True:
             remaining = deadline - asyncio.get_event_loop().time()
             if remaining <= 0:
