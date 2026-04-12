@@ -136,14 +136,14 @@ async def start_session(ctx, rounds: int, user_data):
                 description=f"**{question_text}**",
                 color=discord.Color.blue()
             )
-            embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 15 seconds to answer!")
+            embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 20 seconds to answer!")
             await ctx.send(embed=embed)
 
             def check(m):
                 return m.channel == ctx.channel and not m.author.bot
 
             try:
-                deadline = asyncio.get_event_loop().time() + 15.0
+                deadline = asyncio.get_event_loop().time() + 20.0
                 while True:
                     remaining = deadline - asyncio.get_event_loop().time()
                     if remaining <= 0:
@@ -224,14 +224,14 @@ async def quick_trivia(ctx, user_data, category: str = None):
         description=f"**{question_text}**",
         color=discord.Color.blue()
     )
-    embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 15 seconds to answer! First correct answer wins 10 beans.")
+    embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have 20 seconds to answer! First correct answer wins 10 beans.")
     await ctx.send(embed=embed)
 
     def check(m):
         return m.channel == ctx.channel and not m.author.bot
 
     try:
-        deadline = asyncio.get_event_loop().time() + 15.0
+        deadline = asyncio.get_event_loop().time() + 20.0
         while True:
             remaining = deadline - asyncio.get_event_loop().time()
             if remaining <= 0:
