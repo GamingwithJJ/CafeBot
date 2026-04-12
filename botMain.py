@@ -2013,34 +2013,4 @@ async def slash_leave(interaction: discord.Interaction):
     await MusicModule.leave_channel(ctx)
 
 
-# --- Admin Force Commands ---
-
-@bot.tree.command(name="force_marry", description="Force two users into a marriage")
-async def slash_force_marry(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
-    if not await slash_auth_check(interaction, "bot_admin"): return
-    ctx = InteractionContext(interaction)
-    await BotAdminModule.force_marry(ctx, user1, user2)
-
-
-@bot.tree.command(name="force_divorce", description="Force dissolve a marriage between two users")
-async def slash_force_divorce(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
-    if not await slash_auth_check(interaction, "bot_admin"): return
-    ctx = InteractionContext(interaction)
-    await BotAdminModule.force_divorce(ctx, user1, user2)
-
-
-@bot.tree.command(name="force_adopt", description="Force an adoption — first user becomes the parent")
-async def slash_force_adopt(interaction: discord.Interaction, parent_user: discord.Member, child_user: discord.Member):
-    if not await slash_auth_check(interaction, "bot_admin"): return
-    ctx = InteractionContext(interaction)
-    await BotAdminModule.force_adopt(ctx, parent_user, child_user)
-
-
-@bot.tree.command(name="force_unadopt", description="Force dissolve an adoption relationship between two users")
-async def slash_force_unadopt(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
-    if not await slash_auth_check(interaction, "bot_admin"): return
-    ctx = InteractionContext(interaction)
-    await BotAdminModule.force_unadopt(ctx, user1, user2)
-
-
 bot.run(token)
