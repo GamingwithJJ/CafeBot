@@ -235,7 +235,7 @@ COMMAND_MODULES = {
             ("`.trivia_config`", "Open an interactive dropdown menu to choose which trivia categories appear in your games", "any"),
             ("`.quick_trivia [category]`", "Ask a single trivia question — no session required. First correct answer wins 10 beans. Optionally specify a category (e.g. `animals`, `history`)", "any"),
             ("`.trivia_stats`", "View your personal trivia stats: total correct answers and your enabled categories", "any"),
-            ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.purge` `.throw` `.mock` `.yoink` `.grip`\n**Affectionate:** `.kiss` `.smooch` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill` `.wink` `.salute` `.snap` `.thanks`\n**Reactions:** `.stare` `.shocked` `.popcorn` `.frog`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode` `.stub_toe`", "any")
+            ("`Emotes (optional @target):`", "**Aggressive:** `.punch` `.slap` `.bonk` `.bite` `.kill` `.purge` `.throw` `.mock` `.yoink` `.grip`\n**Affectionate:** `.kiss` `.hug` `.cuddle` `.pat`\n**Social:** `.wave` `.cheer` `.tickle` `.spill` `.wink` `.salute` `.snap` `.thanks`\n**Reactions:** `.stare` `.shocked` `.popcorn` `.frog`\n**Self:** `.happy` `.cry` `.sleep` `.sip` `.explode` `.stub_toe`", "any")
         ]
     },
     "Economy": {
@@ -249,7 +249,14 @@ COMMAND_MODULES = {
             ("`.daily`", "Claim your daily Coffee Bean reward (base: 100 beans). Your streak grows by 1 each consecutive day you claim, adding +2% to your reward per streak day. Missing more than 48 hours resets your streak. 24-hour cooldown", "any"),
             ("`.cafe_status`", "Show a server-wide snapshot: beans in circulation, registered users, active marriages, and total quotes", "any"),
             ("`.slots <bet>`", "Spin a 3-reel slot machine. Minimum bet 50 beans. Triple 7s pays 230×, three of a kind pays 25×, two of a kind returns your bet. No match loses your bet", "any"),
-            ("`.blackjack <bet>`", "Play blackjack against the dealer. Minimum bet 20 beans. Use the Hit and Stand buttons to play. Blackjack on deal pays 1.5×, a win pays 1×, push returns your bet", "any")
+            ("`.blackjack <bet>`", "Play blackjack against the dealer. Minimum bet 20 beans. Use the Hit and Stand buttons to play. Blackjack on deal pays 1.5×, a win pays 1×, push returns your bet", "any"),
+            ("`.lottery`", "Check the current lottery pot and your ticket count", "any"),
+            ("`.lottery_buy <amount>`", "Buy lottery tickets (50 beans each, max 10 per round). More tickets = better odds. Winner takes the whole pot", "any"),
+            ("`.bank`", "View your bank balance, current storage cap, and upgrade cost", "any"),
+            ("`.deposit <amount>`", "Move beans from your wallet into the bank (safe from robbers)", "any"),
+            ("`.withdraw <amount>`", "Move beans from your bank back to your wallet", "any"),
+            ("`.bank_upgrade`", "Spend beans to increase your bank's storage cap. Tiers: 1,000 → 2,000 → 5,000 → 10,000 → 20,000", "any"),
+            ("`.rob <@user>`", "Attempt to steal 10–25% of a user's wallet (45% success). Failure costs you 150 beans paid to the target. 60-min cooldown", "any")
         ]
     },
     "Faith": {
@@ -294,6 +301,8 @@ COMMAND_MODULES = {
             ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin"),
             ("`.remove_trivia <category> <sub_category> <question>`", "Remove a question from the trivia bank by its exact text. Wrap fields containing spaces in quotes.", "bot_admin"),
             ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin"),
+            ("`.admin_lottery_add <amount>`", "Add beans directly to the lottery pot to seed prize pool.", "bot_admin"),
+            ("`.force_lottery_draw`", "Draw a lottery winner and reset the pool", "bot_admin"),
             ("`.force_marry <user1> <user2>`", "Force two users into a marriage without mutual consent", "bot_admin"),
             ("`.force_divorce <user1> <user2>`", "Force dissolve a marriage between two users", "bot_admin"),
             ("`.force_adopt <parent> <child>`", "Force an adoption relationship — first user becomes the parent", "bot_admin"),
@@ -605,15 +614,9 @@ async def cry(ctx):
     await FunModule.gif(ctx, "cry")
 
 
-@bot.command()
+@bot.command(aliases=["smooch"])
 @is_authorized("any")
 async def kiss(ctx, target: discord.Member = None):
-    await FunModule.gif(ctx, "kiss", target)
-
-
-@bot.command()
-@is_authorized("any")
-async def smooch(ctx, target: discord.Member = None):
     await FunModule.gif(ctx, "kiss", target)
 
 
@@ -897,6 +900,48 @@ async def blackjack(ctx, bet: int):
 
 @bot.command()
 @is_authorized("any")
+async def lottery(ctx):
+    await EconomyModule.lottery(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def lottery_buy(ctx, amount: int):
+    await EconomyModule.lottery_buy(ctx, amount)
+
+
+@bot.command()
+@is_authorized("any")
+async def bank(ctx):
+    await EconomyModule.bank(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def deposit(ctx, amount: int):
+    await EconomyModule.deposit(ctx, amount)
+
+
+@bot.command()
+@is_authorized("any")
+async def withdraw(ctx, amount: int):
+    await EconomyModule.withdraw(ctx, amount)
+
+
+@bot.command()
+@is_authorized("any")
+async def bank_upgrade(ctx):
+    await EconomyModule.bank_upgrade(ctx)
+
+
+@bot.command()
+@is_authorized("any")
+async def rob(ctx, target: discord.Member):
+    await EconomyModule.rob(ctx, target)
+
+
+@bot.command()
+@is_authorized("any")
 async def send_anonymous_testimony(ctx, *, message: str):
     await FaithModule.send_testimony(ctx, message)
 
@@ -1045,6 +1090,18 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
     Grants beans to a user without requiring the admin to have funds.
     """
     await BotAdminModule.admin_tip(ctx, target, amount)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def admin_lottery_add(ctx, amount: int):
+    await BotAdminModule.admin_lottery_add(ctx, amount)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def force_lottery_draw(ctx):
+    await BotAdminModule.force_lottery_draw(ctx)
 
 
 @bot.command()
@@ -1227,12 +1284,6 @@ token = config.get("token")
 
 # --- Misc ---
 
-@bot.tree.command(name="ping", description="Check if the bot is awake")
-async def slash_ping(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
-    ctx = InteractionContext(interaction)
-    await ctx.send("Pong!")
-
 
 @bot.tree.command(name="help", description="Show all modules, or list commands in a specific module")
 async def slash_help(interaction: discord.Interaction, module: Optional[str] = None):
@@ -1278,91 +1329,6 @@ async def slash_help(interaction: discord.Interaction, module: Optional[str] = N
         embed.set_footer(text=f"Requested by {ctx.author.display_name}")
         await ctx.send(embed=embed)
 
-
-# --- Moderation ---
-
-@bot.tree.command(name="m_purge", description="Delete the last N messages in this channel")
-async def slash_m_purge(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "server_admin"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.purge(ctx, amount)
-
-
-@bot.tree.command(name="lockdown", description="Lock or unlock the current channel")
-async def slash_lockdown(interaction: discord.Interaction, state: bool = True, all_channels: bool = False):
-    if not await slash_auth_check(interaction, "server_admin"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.lockdown(ctx, state, all_channels)
-
-
-@bot.tree.command(name="slowmode", description="Set a per-message cooldown in this channel")
-async def slash_slowmode(interaction: discord.Interaction, boolean: bool = True, seconds: int = 500):
-    if not await slash_auth_check(interaction, "server_admin"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.slowmode(ctx, boolean, seconds)
-
-
-@bot.tree.command(name="kick", description="Kick a member from the server")
-async def slash_kick(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason provided"):
-    if not await slash_auth_check(interaction, "kick"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.kick_user(ctx, member, reason)
-
-
-@bot.tree.command(name="ban", description="Permanently ban a member from the server")
-async def slash_ban(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason provided"):
-    if not await slash_auth_check(interaction, "ban"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.ban_user(ctx, member, reason)
-
-
-@bot.tree.command(name="softban", description="Ban then immediately unban a member to wipe their recent messages")
-async def slash_softban(interaction: discord.Interaction, member: discord.Member, amount_of_days: int = 1, reason: str = "No reason given"):
-    if not await slash_auth_check(interaction, "server_admin"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.softban_user(ctx, member, amount_of_days, reason)
-
-
-@bot.tree.command(name="unban", description="Unban a user by their Discord user ID")
-async def slash_unban(interaction: discord.Interaction, user_id: str):
-    if not await slash_auth_check(interaction, "ban"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.unban_user(ctx, int(user_id))
-
-
-@bot.tree.command(name="mute", description="Put a user in Discord timeout")
-async def slash_mute(interaction: discord.Interaction, member: discord.Member, minutes: int = 10, reason: str = "No reason given"):
-    if not await slash_auth_check(interaction, "server_admin"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.timeout_user(ctx, member, minutes, reason)
-
-
-@bot.tree.command(name="unmute", description="Remove an active timeout from a user")
-async def slash_unmute(interaction: discord.Interaction, member: discord.Member):
-    if not await slash_auth_check(interaction, "server_admin"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.remove_timeout(ctx, member)
-
-
-@bot.tree.command(name="warn", description="Log a warning against a server member")
-async def slash_warn(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason provided"):
-    if not await slash_auth_check(interaction, "moderator"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.warn_user(ctx, member, reason)
-
-
-@bot.tree.command(name="warnings", description="View a member's warning log")
-async def slash_warnings(interaction: discord.Interaction, member: discord.Member):
-    if not await slash_auth_check(interaction, "moderator"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.view_warnings(ctx, member)
-
-
-@bot.tree.command(name="whois", description="View a detailed profile of a server member")
-async def slash_whois(interaction: discord.Interaction, member: discord.Member):
-    if not await slash_auth_check(interaction, "server_admin"): return
-    ctx = InteractionContext(interaction)
-    await ModerationModule.whois(ctx, member)
 
 
 # --- DnD ---
@@ -1634,12 +1600,6 @@ async def slash_kiss(interaction: discord.Interaction, target: Optional[discord.
     await FunModule.gif(ctx, "kiss", target)
 
 
-@bot.tree.command(name="smooch", description="Smooch someone!")
-async def slash_smooch(interaction: discord.Interaction, target: Optional[discord.Member] = None):
-    if not await slash_auth_check(interaction, "any"): return
-    ctx = InteractionContext(interaction)
-    await FunModule.gif(ctx, "kiss", target)
-
 
 @bot.tree.command(name="hug", description="Hug someone!")
 async def slash_hug(interaction: discord.Interaction, target: Optional[discord.Member] = None):
@@ -1880,6 +1840,55 @@ async def slash_blackjack(interaction: discord.Interaction, bet: int):
     if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await EconomyModule.blackjack(ctx, bet)
+
+
+@bot.tree.command(name="lottery", description="Check the current lottery pot and your ticket count")
+async def slash_lottery(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.lottery(ctx)
+
+
+@bot.tree.command(name="lottery_buy", description="Buy lottery tickets (50 beans each, max 10 per round)")
+async def slash_lottery_buy(interaction: discord.Interaction, amount: int):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.lottery_buy(ctx, amount)
+
+
+@bot.tree.command(name="bank", description="View your bank balance, cap, and upgrade info")
+async def slash_bank(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.bank(ctx)
+
+
+@bot.tree.command(name="deposit", description="Move beans from your wallet into your bank")
+async def slash_deposit(interaction: discord.Interaction, amount: int):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.deposit(ctx, amount)
+
+
+@bot.tree.command(name="withdraw", description="Move beans from your bank back to your wallet")
+async def slash_withdraw(interaction: discord.Interaction, amount: int):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.withdraw(ctx, amount)
+
+
+@bot.tree.command(name="bank_upgrade", description="Purchase the next bank tier to increase your storage cap")
+async def slash_bank_upgrade(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.bank_upgrade(ctx)
+
+
+@bot.tree.command(name="rob", description="Attempt to steal beans from another user's wallet")
+async def slash_rob(interaction: discord.Interaction, target: discord.Member):
+    if not await slash_auth_check(interaction, "any"): return
+    ctx = InteractionContext(interaction)
+    await EconomyModule.rob(ctx, target)
 
 
 # --- Faith ---

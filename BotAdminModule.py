@@ -1,3 +1,4 @@
+import random
 import DataStorage
 import discord
 from Classes.QuoteClass import Quote
@@ -80,26 +81,32 @@ async def remove_gif_message(ctx, type: str, message: str):
 
 async def add_quote(ctx, authors, quote):
     """Adds a new quote with the author"""
-    quotes_dictionary = DataStorage.quotes
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
+
+    guild_id = str(ctx.guild.id)
 
     if isinstance(authors, str):
         authors = [authors.lower().capitalize()]
     else:
         authors = [author.lower().capitalize() for author in authors]
 
+    guild_quotes = DataStorage.quotes.setdefault(guild_id, {})
+
     # Filter for already exists
     for author in authors:
-        if author in quotes_dictionary:
-            for quote_object in quotes_dictionary[author]:
+        if author in guild_quotes:
+            for quote_object in guild_quotes[author]:
                 if quote_object.get_text() == quote:
                     await ctx.send(f"That quote already exists for {author}")
                     return
 
     for author in authors:
         quote_object = Quote(quote, author)
-        if author not in quotes_dictionary:
-            DataStorage.quotes[author] = []
-        DataStorage.quotes[author].append(quote_object)
+        if author not in guild_quotes:
+            guild_quotes[author] = []
+        guild_quotes[author].append(quote_object)
 
     DataStorage.save_quotes()
     await ctx.send(f"✅ Added quote")
@@ -107,10 +114,17 @@ async def add_quote(ctx, authors, quote):
 
 async def remove_quote(ctx, quote_to_remove: str):
     """Removes a quote by its text content."""
-    for author, quote_list in DataStorage.quotes.items():
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
+
+    guild_id = str(ctx.guild.id)
+    guild_quotes = DataStorage.quotes.get(guild_id, {})
+
+    for author, quote_list in guild_quotes.items():
         for index, quote_obj in enumerate(quote_list):
             if quote_obj.get_text() == quote_to_remove:
-                DataStorage.quotes[author].pop(index)
+                quote_list.pop(index)
                 DataStorage.save_quotes()
                 await ctx.send(f"✅ Removed quote from {author}!")
                 return
@@ -271,6 +285,50 @@ async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
         await ctx.send(f"📜 Adoption dissolved: {user2.mention} is no longer the parent of {user1.mention}.")
     else:
         await ctx.send("❌ These users don't have an adoption relationship.")
+
+
+async def force_lottery_draw(ctx):
+    """Draws a lottery winner and resets the pool."""
+    if not DataStorage.lottery_entries:
+        await ctx.send("No tickets have been sold this round!")
+        return
+
+    population = list(DataStorage.lottery_entries.keys())
+    weights = [DataStorage.lottery_entries[uid] for uid in population]
+    winner_id = random.choices(population, weights=weights, k=1)[0]
+
+    winner_data = DataStorage.get_or_create_user(int(winner_id))
+    pot = DataStorage.lottery_pot
+    winner_data.ajust_beans(pot)
+
+    DataStorage.lottery_pot = 0.0
+    DataStorage.lottery_entries = {}
+    DataStorage.save_user_data()
+    DataStorage.save_lottery()
+
+    embed = discord.Embed(
+        title="🎉 Lottery Draw!",
+        description=f"<@{winner_id}> won the lottery and took home **{int(pot):,} beans**!",
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text="The pot has been reset. Good luck next round! 🎟️")
+    await ctx.send(embed=embed)
+
+
+async def admin_lottery_add(ctx, amount: int):
+    """Adds beans directly to the lottery pot without requiring ticket purchases."""
+    if amount <= 0:
+        await ctx.send("Amount must be positive.")
+        return
+    DataStorage.lottery_pot += amount
+    DataStorage.save_lottery()
+    embed = discord.Embed(
+        title="🎟️ Lottery Pot Updated",
+        description=f"Added **{amount:,}** beans to the lottery pot.",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="New Pot", value=f"{int(DataStorage.lottery_pot):,} beans")
+    await ctx.send(embed=embed)
 
 
 async def admin_tip(ctx, target: discord.Member, amount: float):

@@ -33,17 +33,19 @@ administrators = []
 
 magic_eight_ball = []
 
-#quote_users = []
-# Users who are valid quote users
+LEGACY_GUILD_ID = "1399918182529105920"
 
-#quotes = []
-quotes = {} #Keys are names of quoters
+quotes = {}  # {guild_id_str: {author_name: [Quote]}}
 
 
 gifs = {}
 
 
 gif_messages = {}
+
+lottery_pot = 0.0
+lottery_entries = {}  # discord_id (str) → ticket count (int)
+LOTTERY_FILE = "Saves/lottery.json"
 
 """
 Checks if a user with a specified discord id exists and creats one if it does not.
@@ -71,8 +73,10 @@ def save_quotes():
     """Saves quotes to JSON file."""
     data_to_save = {}
 
-    for quoter, quote_list in quotes.items():
-        data_to_save[quoter] = [q.to_dict() for q in quote_list]
+    for guild_id, author_dict in quotes.items():
+        data_to_save[guild_id] = {}
+        for author, quote_list in author_dict.items():
+            data_to_save[guild_id][author] = [q.to_dict() for q in quote_list]
 
     try:
         with open(QUOTES_FILE, "w", encoding="utf-8") as f:
@@ -133,6 +137,36 @@ def save_trivia_bank():
         print(f"❌ Error saving trivia bank: {e}")
 
 
+def save_lottery():
+    """Saves lottery state to JSON file."""
+    global lottery_pot, lottery_entries
+    try:
+        with open(LOTTERY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"pot": lottery_pot, "entries": lottery_entries}, f, indent=4)
+        print("✅ Lottery state saved!")
+    except Exception as e:
+        print(f"❌ Error saving lottery state: {e}")
+
+
+def load_lottery():
+    """Loads lottery state from JSON file."""
+    global lottery_pot, lottery_entries
+    if os.path.exists(LOTTERY_FILE):
+        try:
+            with open(LOTTERY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            lottery_pot = data.get("pot", 0.0)
+            lottery_entries = data.get("entries", {})
+            print(f"✅ Lottery loaded — pot: {lottery_pot}, entries: {len(lottery_entries)}")
+        except Exception as e:
+            print(f"❌ Error loading lottery state: {e}")
+            lottery_pot = 0.0
+            lottery_entries = {}
+    else:
+        lottery_pot = 0.0
+        lottery_entries = {}
+
+
 def save_all():
     """Saves all bot configuration data."""
     save_quotes()
@@ -142,6 +176,7 @@ def save_all():
     save_verses()
     save_trivia_bank()
     save_bible_index()
+    save_lottery()
 
 
 def load_bible_index():
@@ -182,6 +217,7 @@ def load_bible_index():
 def load_all():
     """Loads all data from files. Returns defaults if files don't exist."""
     global quotes, gifs, gif_messages, magic_eight_ball, verses, trivia_questions
+    load_lottery()
 
     # Load quotes
     quotes_data = {}
@@ -189,15 +225,20 @@ def load_all():
         with open(QUOTES_FILE, "r") as f:
             quotes_data = json.load(f)
 
-    for quoter, quote_list in quotes_data.items():
+    # Migrate old format {author: [Quote]} → {guild_id: {author: [Quote]}}
+    if quotes_data and any(isinstance(v, list) for v in quotes_data.values()):
+        quotes_data = {LEGACY_GUILD_ID: quotes_data}
 
-        if quoter not in quotes:
-            quotes[quoter] = []
-
-        for quote_dict in quote_list:
-            quote_object = Quote(quote_dict['text'], quote_dict['author'])
-            quote_object.set_tags(quote_dict.get('tags', []))
-            quotes[quoter].append(quote_object)
+    for guild_id, author_dict in quotes_data.items():
+        if guild_id not in quotes:
+            quotes[guild_id] = {}
+        for author, quote_list in author_dict.items():
+            if author not in quotes[guild_id]:
+                quotes[guild_id][author] = []
+            for quote_dict in quote_list:
+                quote_object = Quote(quote_dict['text'], quote_dict['author'])
+                quote_object.set_tags(quote_dict.get('tags', []))
+                quotes[guild_id][author].append(quote_object)
 
 
     # Load gifs
@@ -298,6 +339,12 @@ def load_user_data():
             user.trivia_correct = user_dict.get("trivia_correct", 0)
             user.bookmarked_verses = user_dict.get("bookmarked_verses", [])
             user.warnings = user_dict.get("warnings", [])
+            user.bank_balance = user_dict.get("bank_balance", 0.0)
+            user.bank_level = user_dict.get("bank_level", 0)
+            last_rob_str = user_dict.get("last_rob")
+            user.last_rob = datetime.datetime.fromisoformat(last_rob_str) if last_rob_str else None
+            rob_immunity_str = user_dict.get("rob_immunity_until")
+            user.rob_immunity_until = datetime.datetime.fromisoformat(rob_immunity_str) if rob_immunity_str else None
             user.adopted_children = user_dict.get("adopted_children", [])
             raw_adopted_by = user_dict.get("adopted_by", [])
             if raw_adopted_by is None:

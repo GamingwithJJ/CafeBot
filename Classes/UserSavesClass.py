@@ -47,6 +47,12 @@ class User:
         # Moderation
         self.warnings = []  # List of {"reason": str, "issued_by": str, "timestamp": str}
 
+        # Bank
+        self.bank_balance = 0.0
+        self.bank_level = 0
+        self.last_rob = None
+        self.rob_immunity_until = None
+
     def add_adopted_child(self, child_id: int):
         self.adopted_children.append(child_id)
 
@@ -195,7 +201,11 @@ class User:
             "enabled_trivia_categories" : self.enabled_trivia_categories,
             "trivia_correct": self.trivia_correct,
             "bookmarked_verses": self.bookmarked_verses,
-            "warnings": self.warnings
+            "warnings": self.warnings,
+            "bank_balance": self.bank_balance,
+            "bank_level": self.bank_level,
+            "last_rob": self.last_rob.isoformat() if self.last_rob else None,
+            "rob_immunity_until": self.rob_immunity_until.isoformat() if self.rob_immunity_until else None
         }
 
     def to_json(self):

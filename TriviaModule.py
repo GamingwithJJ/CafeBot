@@ -215,8 +215,33 @@ async def start_session(ctx, rounds: int, user_data):
         await ctx.send(embed=embed)
 
 
+class QuickTriviaView(discord.ui.View):
+    def __init__(self, ctx, user_data, category_arg):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.user_data = user_data
+        self.category_arg = category_arg
+        self.message = None
+
+    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green)
+    async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        await interaction.response.defer()
+        updated_user_data = DataStorage.get_or_create_user(self.ctx.author.id)
+        await quick_trivia(self.ctx, updated_user_data, self.category_arg)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            await self.message.edit(view=self)
+
+
 async def quick_trivia(ctx, user_data, category: str = None):
     """Single-question trivia — no session needed."""
+    category_arg = category  # preserve the original arg for Play Again
     available_questions = []
 
     if category:
@@ -255,6 +280,8 @@ async def quick_trivia(ctx, user_data, category: str = None):
     def check(m):
         return m.channel == ctx.channel and not m.author.bot
 
+    view = QuickTriviaView(ctx, user_data, category_arg)
+
     try:
         deadline = asyncio.get_event_loop().time() + timeout
         while True:
@@ -268,11 +295,13 @@ async def quick_trivia(ctx, user_data, category: str = None):
                 winner_data.trivia_correct += 1
                 winner_data.ajust_beans(10)
                 DataStorage.save_user_data()
-                await ctx.send(f"✅ **{msg.author.display_name}** got it! The answer was: **{official_answer}**. +10 beans!")
+                result = await ctx.send(f"✅ **{msg.author.display_name}** got it! The answer was: **{official_answer}**. +10 beans!", view=view)
+                view.message = result
                 return
     except asyncio.TimeoutError:
         official_answer = acceptable_answers[0].capitalize()
-        await ctx.send(f"⏳ Time's up! The answer was: **{official_answer}**")
+        result = await ctx.send(f"⏳ Time's up! The answer was: **{official_answer}**", view=view)
+        view.message = result
 
 
 async def trivia_stats(ctx, user_data):

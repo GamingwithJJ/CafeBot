@@ -232,18 +232,18 @@ async def duel(ctx, target: discord.Member):
 
 
 async def quote(ctx):
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
 
-    list_of_users = list(DataStorage.quotes.keys())
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {})
+    list_of_users = list(guild_quotes.keys())
     if not list_of_users:
         await ctx.send("No quotes have been added yet!")
         return
 
-    quotes_dictionary = DataStorage.quotes
-    random_user_number = random.randint(0, len(list_of_users) - 1)
-    random_user = list_of_users[random_user_number]
-
-    random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
-    random_quote = quotes_dictionary[random_user][random_quote_number]
+    random_user = random.choice(list_of_users)
+    random_quote = random.choice(guild_quotes[random_user])
 
     embed = discord.Embed(
         description=f'"{random_quote.get_text()}"',
@@ -254,48 +254,59 @@ async def quote(ctx):
 
 
 async def quotes(ctx, amount: int):
-    quotes_users = list(DataStorage.quotes.keys())
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
+
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {})
+    quotes_users = list(guild_quotes.keys())
     if not quotes_users:
         await ctx.send("No quotes have been added yet!")
         return
 
     embed = discord.Embed(title="📖 Random Quotes", color=discord.Color.gold())
-    for number in range(0, amount):
-        quotes_dictionary = DataStorage.quotes
-        random_user_number = random.randint(0, len(quotes_users) - 1)
-        random_user = quotes_users[random_user_number]
-
-        random_quote_number = random.randint(0, len(quotes_dictionary[random_user]) - 1)
-        random_quote = quotes_dictionary[random_user][random_quote_number]
+    for _ in range(amount):
+        random_user = random.choice(quotes_users)
+        random_quote = random.choice(guild_quotes[random_user])
         embed.add_field(name=f"— {random_quote.get_author()}", value=f'"{random_quote.get_text()}"', inline=False)
     await ctx.send(embed=embed)
 
 
 async def quote_list(ctx, user: str, number):
     """Sorts quotes by a individual and only shows quotes which are sent by a certain individual."""
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
+
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {})
     user = user.lower().capitalize()
-    if user not in DataStorage.quotes.keys():
+    if user not in guild_quotes:
         await ctx.send(f"{user} user is not a recognized quote user")
         return
 
-    available = DataStorage.quotes[user]
+    available = guild_quotes[user]
     number = min(number, len(available))
     selected_quotes = random.sample(available, number)
     embed = discord.Embed(title=f"📖 Quotes from {user}", color=discord.Color.gold())
-    for i, quote in enumerate(selected_quotes):
-        embed.add_field(name=f"Quote #{i + 1}", value=f'"{quote.get_text()}"', inline=False)
+    for i, q in enumerate(selected_quotes):
+        embed.add_field(name=f"Quote #{i + 1}", value=f'"{q.get_text()}"', inline=False)
     await ctx.send(embed=embed)
 
 
 async def quote_count(ctx, user: str):
     """Displays the quotes count of a certain user"""
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
+
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {})
     user = user.lower().capitalize()
-    if user not in DataStorage.quotes.keys():
+    if user not in guild_quotes:
         await ctx.send(f"{user} is not a valid quoter")
         return
 
     embed = discord.Embed(
-        description=f"**{user}** has **{len(DataStorage.quotes[user])}** quotes in the database.",
+        description=f"**{user}** has **{len(guild_quotes[user])}** quotes in the database.",
         color=discord.Color.gold()
     )
     await ctx.send(embed=embed)
@@ -303,28 +314,21 @@ async def quote_count(ctx, user: str):
 
 async def quote_top(ctx):
     """Displays the top ten quoters"""
-    quoters = DataStorage.quotes.keys()
-    quotes = DataStorage.quotes
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
 
-    quote_amounts = [] # List which stores the amount of quotes for each quoter and the name of the quoter in a tuple
-    for quoter_temp in quoters:
-        amount_of_quotes = len(quotes[quoter_temp])
-        quote_amounts.append((quoter_temp, amount_of_quotes))
-
-    top_users = sorted(
-        quote_amounts,
-        key=lambda x: x[1], # Sort by second number
-        reverse=True  # Sort descending (biggest numbers first)
-    )[:10]
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {})
+    quote_amounts = [(author, len(qs)) for author, qs in guild_quotes.items()]
+    top_users = sorted(quote_amounts, key=lambda x: x[1], reverse=True)[:10]
 
     if not top_users:
         await ctx.send("There were no users who qualify")
         return
 
     description = ""
-    for i, quoter in enumerate(top_users):
-        quote_amount = quoter[1]
-        description += f"{i + 1}. `{quoter[0]}`: {quote_amount}\n"
+    for i, (author, count) in enumerate(top_users):
+        description += f"{i + 1}. `{author}`: {count}\n"
 
     embed = discord.Embed(
         title="🏆 Top 10 users with the most quotes!",
@@ -476,9 +480,14 @@ async def marriage_top(ctx):
 
 async def quote_search(ctx, keyword: str):
     """Search quotes by text content."""
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
+
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {})
     keyword_lower = keyword.lower()
     results = []
-    for author, quote_list in DataStorage.quotes.items():
+    for author, quote_list in guild_quotes.items():
         for q in quote_list:
             if keyword_lower in q.get_text().lower():
                 results.append(q)
@@ -497,19 +506,24 @@ async def quote_search(ctx, keyword: str):
 
 async def quote_stats(ctx):
     """Show overall quote database statistics."""
-    if not DataStorage.quotes:
+    if ctx.guild is None:
+        await ctx.send("❌ Quote commands can't be used in DMs.")
+        return
+
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {})
+    if not guild_quotes:
         await ctx.send("No quotes in the database yet.")
         return
 
-    total = sum(len(qs) for qs in DataStorage.quotes.values())
-    top_author = max(DataStorage.quotes, key=lambda a: len(DataStorage.quotes[a]))
-    avg = total / len(DataStorage.quotes)
+    total = sum(len(qs) for qs in guild_quotes.values())
+    top_author = max(guild_quotes, key=lambda a: len(guild_quotes[a]))
+    avg = total / len(guild_quotes)
 
     embed = discord.Embed(title="📊 Quote Database Stats", color=discord.Color.gold())
     embed.add_field(name="Total Quotes", value=str(total), inline=True)
-    embed.add_field(name="Total Authors", value=str(len(DataStorage.quotes)), inline=True)
+    embed.add_field(name="Total Authors", value=str(len(guild_quotes)), inline=True)
     embed.add_field(name="Average per Author", value=f"{avg:.1f}", inline=True)
-    embed.add_field(name="Most Quoted", value=f"{top_author} ({len(DataStorage.quotes[top_author])})", inline=False)
+    embed.add_field(name="Most Quoted", value=f"{top_author} ({len(guild_quotes[top_author])})", inline=False)
     await ctx.send(embed=embed)
 
 
@@ -525,7 +539,8 @@ async def profile(ctx):
         partner_display = "Single 💔"
 
     author_name = ctx.author.display_name.lower().capitalize()
-    quote_count = len(DataStorage.quotes.get(author_name, []))
+    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {}) if ctx.guild else {}
+    quote_count = len(guild_quotes.get(author_name, []))
 
     embed = discord.Embed(
         title=f"☕ {ctx.author.display_name}'s Profile",
