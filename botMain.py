@@ -919,7 +919,15 @@ async def bank(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def deposit(ctx, amount: int):
+async def deposit(ctx, amount: str):
+    if amount.lower() == "all":
+        amount = int(DataStorage.get_or_create_user(ctx.author.id).get_beans())
+    else:
+        try:
+            amount = int(amount)
+        except ValueError:
+            await ctx.send("Please specify a valid amount or `all`.")
+            return
     await EconomyModule.deposit(ctx, amount)
 
 

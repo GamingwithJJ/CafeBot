@@ -45,7 +45,7 @@ class User:
         self.bookmarked_verses = []  # List of [version, book, chapter, verse_num]
 
         # Moderation
-        self.warnings = []  # List of {"reason": str, "issued_by": str, "timestamp": str}
+        self.warnings = {}  # {guild_id_str: [{"reason": str, "issued_by": str, "timestamp": str}]}
 
         # Bank
         self.bank_balance = 0.0
@@ -156,11 +156,11 @@ class User:
     def get_verse_bookmarks(self):
         return self.bookmarked_verses
 
-    def add_warning(self, reason: str, issued_by: str, timestamp: str):
-        self.warnings.append({"reason": reason, "issued_by": issued_by, "timestamp": timestamp})
+    def add_warning(self, guild_id: str, reason: str, issued_by: str, timestamp: str):
+        self.warnings.setdefault(str(guild_id), []).append({"reason": reason, "issued_by": issued_by, "timestamp": timestamp})
 
-    def get_warnings(self):
-        return self.warnings
+    def get_warnings(self, guild_id: str):
+        return self.warnings.get(str(guild_id), [])
 
     def get_beans(self):
         return self.beans

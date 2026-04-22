@@ -43,8 +43,8 @@ gifs = {}
 
 gif_messages = {}
 
-lottery_pot = 0.0
-lottery_entries = {}  # discord_id (str) → ticket count (int)
+lottery_pot = {}     # guild_id_str → float
+lottery_entries = {}  # guild_id_str → {discord_id_str: ticket count}
 LOTTERY_FILE = "Saves/lottery.json"
 
 """
@@ -57,6 +57,14 @@ def get_or_create_user(user_id):
     if user_id_str not in user_data:
         user_data[user_id_str] = User(user_id_str)
     return user_data[user_id_str]
+
+
+def get_lottery_pot(guild_id):
+    return lottery_pot.get(str(guild_id), 0.0)
+
+
+def get_lottery_entries(guild_id):
+    return lottery_entries.get(str(guild_id), {})
 
 
 def save_eight_ball():
@@ -155,15 +163,23 @@ def load_lottery():
         try:
             with open(LOTTERY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            lottery_pot = data.get("pot", 0.0)
-            lottery_entries = data.get("entries", {})
-            print(f"✅ Lottery loaded — pot: {lottery_pot}, entries: {len(lottery_entries)}")
+            pot = data.get("pot", {})
+            entries = data.get("entries", {})
+            # Migrate old flat format: {"pot": float, "entries": {user_id: count}}
+            if isinstance(pot, (int, float)):
+                lottery_pot = {}
+                lottery_entries = {}
+                print("⚠️ Old lottery format detected — resetting (per-server migration).")
+            else:
+                lottery_pot = pot
+                lottery_entries = entries
+            print(f"✅ Lottery loaded — {len(lottery_pot)} server(s)")
         except Exception as e:
             print(f"❌ Error loading lottery state: {e}")
-            lottery_pot = 0.0
+            lottery_pot = {}
             lottery_entries = {}
     else:
-        lottery_pot = 0.0
+        lottery_pot = {}
         lottery_entries = {}
 
 
@@ -338,7 +354,11 @@ def load_user_data():
             user.enabled_trivia_categories = user_dict.get("enabled_trivia_categories", [])
             user.trivia_correct = user_dict.get("trivia_correct", 0)
             user.bookmarked_verses = user_dict.get("bookmarked_verses", [])
-            user.warnings = user_dict.get("warnings", [])
+            raw_warnings = user_dict.get("warnings", {})
+            if isinstance(raw_warnings, list):
+                user.warnings = {LEGACY_GUILD_ID: raw_warnings} if raw_warnings else {}
+            else:
+                user.warnings = raw_warnings
             user.bank_balance = user_dict.get("bank_balance", 0.0)
             user.bank_level = user_dict.get("bank_level", 0)
             last_rob_str = user_dict.get("last_rob")

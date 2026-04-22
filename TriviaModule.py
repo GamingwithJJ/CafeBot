@@ -300,8 +300,11 @@ async def quick_trivia(ctx, user_data, category: str = None):
                 return
     except asyncio.TimeoutError:
         official_answer = acceptable_answers[0].capitalize()
-        result = await ctx.send(f"⏳ Time's up! The answer was: **{official_answer}**", view=view)
-        view.message = result
+        try:
+            result = await ctx.send(f"⏳ Time's up! The answer was: **{official_answer}**", view=view)
+            view.message = result
+        except discord.DiscordException:
+            pass
 
 
 async def trivia_stats(ctx, user_data):

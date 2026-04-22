@@ -111,10 +111,10 @@ async def warn_user(ctx, member: discord.Member, reason: str):
 
     user_data = DataStorage.get_or_create_user(member.id)
     timestamp = datetime.datetime.now().isoformat(timespec="seconds")
-    user_data.add_warning(reason, str(ctx.author.id), timestamp)
+    user_data.add_warning(str(ctx.guild.id), reason, str(ctx.author.id), timestamp)
     DataStorage.save_user_data()
 
-    total = len(user_data.get_warnings())
+    total = len(user_data.get_warnings(str(ctx.guild.id)))
     embed = discord.Embed(
         title="⚠️ Warning Issued",
         color=discord.Color.orange()
@@ -129,7 +129,7 @@ async def warn_user(ctx, member: discord.Member, reason: str):
 async def view_warnings(ctx, member: discord.Member):
     """Display all logged warnings for a member."""
     user_data = DataStorage.get_or_create_user(member.id)
-    warnings = user_data.get_warnings()
+    warnings = user_data.get_warnings(str(ctx.guild.id))
 
     if not warnings:
         await ctx.send(f"✅ **{member.display_name}** has no warnings on record.")

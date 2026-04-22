@@ -290,20 +290,23 @@ async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
 
 async def force_lottery_draw(ctx):
     """Draws a lottery winner and resets the pool."""
-    if not DataStorage.lottery_entries:
+    guild_id = str(ctx.guild.id)
+    entries = DataStorage.get_lottery_entries(guild_id)
+
+    if not entries:
         await ctx.send("No tickets have been sold this round!")
         return
 
-    population = list(DataStorage.lottery_entries.keys())
-    weights = [DataStorage.lottery_entries[uid] for uid in population]
+    population = list(entries.keys())
+    weights = [entries[uid] for uid in population]
     winner_id = random.choices(population, weights=weights, k=1)[0]
 
     winner_data = DataStorage.get_or_create_user(int(winner_id))
-    pot = DataStorage.lottery_pot
+    pot = DataStorage.get_lottery_pot(guild_id)
     winner_data.ajust_beans(pot)
 
-    DataStorage.lottery_pot = 0.0
-    DataStorage.lottery_entries = {}
+    DataStorage.lottery_pot[guild_id] = 0.0
+    DataStorage.lottery_entries[guild_id] = {}
     DataStorage.save_user_data()
     DataStorage.save_lottery()
 
@@ -321,14 +324,15 @@ async def admin_lottery_add(ctx, amount: int):
     if amount <= 0:
         await ctx.send("Amount must be positive.")
         return
-    DataStorage.lottery_pot += amount
+    guild_id = str(ctx.guild.id)
+    DataStorage.lottery_pot[guild_id] = DataStorage.get_lottery_pot(guild_id) + amount
     DataStorage.save_lottery()
     embed = discord.Embed(
         title="🎟️ Lottery Pot Updated",
         description=f"Added **{amount:,}** beans to the lottery pot.",
         color=discord.Color.gold()
     )
-    embed.add_field(name="New Pot", value=f"{int(DataStorage.lottery_pot):,} beans")
+    embed.add_field(name="New Pot", value=f"{int(DataStorage.get_lottery_pot(guild_id)):,} beans")
     await ctx.send(embed=embed)
 
 
@@ -385,7 +389,7 @@ async def admin_user_info(ctx, target: discord.Member):
     # Moderation
     embed.add_field(
         name="🔨 Moderation",
-        value=f"**Warnings:** {len(user.warnings)}",
+        value=f"**Warnings (this server):** {len(user.get_warnings(str(ctx.guild.id)))}",
         inline=False
     )
 

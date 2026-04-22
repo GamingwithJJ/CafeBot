@@ -308,6 +308,120 @@ async def slots(ctx, bet: int):
     view.message = msg
 
 
+_BJ_RANK_VALUES = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':10,'Q':10,'K':10,'A':11}
+_BJ_SUITS = ['♠', '♥', '♦', '♣']
+_BJ_RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A']
+
+
+def _bj_hand_value(hand):
+    total = sum(_BJ_RANK_VALUES[rank] for rank, _ in hand)
+    aces = sum(1 for rank, _ in hand if rank == 'A')
+    while total > 21 and aces:
+        total -= 10
+        aces -= 1
+    return total
+
+
+def _bj_hand_display(hand, hide_second=False):
+    cards = [f"{rank}{suit}" for rank, suit in hand]
+    if hide_second:
+        return f"{cards[0]}  🂠"
+    return "  ".join(cards)
+
+
+def _bj_make_embed(player, dealer, hide_dealer=True, result_text=None):
+    embed = discord.Embed(title="🃏 Blackjack", color=discord.Color.dark_green())
+    embed.add_field(name=f"Your Hand ({_bj_hand_value(player)})", value=_bj_hand_display(player), inline=False)
+    d_label = "Dealer's Hand" if hide_dealer else f"Dealer's Hand ({_bj_hand_value(dealer)})"
+    embed.add_field(name=d_label, value=_bj_hand_display(dealer, hide_second=hide_dealer), inline=False)
+    if result_text:
+        embed.add_field(name="Result", value=result_text, inline=False)
+    return embed
+
+
+def _bj_resolve(player, dealer, bet):
+    p, d = _bj_hand_value(player), _bj_hand_value(dealer)
+    if p > 21:
+        return -bet, "💥 Bust! You went over 21."
+    elif d > 21 or p > d:
+        return bet, "🎉 You win!"
+    elif p == d:
+        return 0, "🤝 Push — your bet is returned."
+    else:
+        return -bet, "💸 Dealer wins."
+
+
+def _bj_new_game():
+    deck = [(rank, suit) for suit in _BJ_SUITS for rank in _BJ_RANKS]
+    random.shuffle(deck)
+    player_hand = [deck.pop(), deck.pop()]
+    dealer_hand = [deck.pop(), deck.pop()]
+    return deck, player_hand, dealer_hand
+
+
+class BlackjackView(discord.ui.View):
+    def __init__(self, ctx, user, bet, deck, player_hand, dealer_hand):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.user = user
+        self.bet = bet
+        self.deck = deck
+        self.player_hand = player_hand
+        self.dealer_hand = dealer_hand
+        self.message = None
+
+    async def end_game(self, interaction, final_player, final_dealer):
+        winnings, result_text = _bj_resolve(final_player, final_dealer, self.bet)
+        self.user.ajust_beans(winnings)
+        DataStorage.save_user_data()
+        change = f"+{winnings}" if winnings >= 0 else str(winnings)
+        result_text += f"\n**{change} beans** → Balance: {int(self.user.get_beans())}"
+        embed = _bj_make_embed(final_player, final_dealer, hide_dealer=False, result_text=result_text)
+        self.stop()
+        play_again_view = BlackjackPlayAgainView(self.ctx, self.bet)
+        await interaction.response.edit_message(embed=embed, view=play_again_view)
+        play_again_view.message = interaction.message
+
+    @discord.ui.button(label="Hit", style=discord.ButtonStyle.green)
+    async def hit(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        self.player_hand.append(self.deck.pop())
+        pv = _bj_hand_value(self.player_hand)
+        if pv > 21:
+            await self.end_game(interaction, self.player_hand, self.dealer_hand)
+        elif pv == 21:
+            while _bj_hand_value(self.dealer_hand) < 17:
+                self.dealer_hand.append(self.deck.pop())
+            await self.end_game(interaction, self.player_hand, self.dealer_hand)
+        else:
+            await interaction.response.edit_message(
+                embed=_bj_make_embed(self.player_hand, self.dealer_hand, hide_dealer=True), view=self)
+
+    @discord.ui.button(label="Stand", style=discord.ButtonStyle.red)
+    async def stand(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        while _bj_hand_value(self.dealer_hand) < 17:
+            self.dealer_hand.append(self.deck.pop())
+        await self.end_game(interaction, self.player_hand, self.dealer_hand)
+
+    async def on_timeout(self):
+        while _bj_hand_value(self.dealer_hand) < 17:
+            self.dealer_hand.append(self.deck.pop())
+        winnings, result_text = _bj_resolve(self.player_hand, self.dealer_hand, self.bet)
+        self.user.ajust_beans(winnings)
+        DataStorage.save_user_data()
+        embed = _bj_make_embed(self.player_hand, self.dealer_hand, hide_dealer=False,
+                               result_text=result_text + " (timed out)")
+        play_again_view = BlackjackPlayAgainView(self.ctx, self.bet)
+        play_again_view.message = self.message
+        if self.message:
+            await self.message.edit(embed=embed, view=play_again_view)
+
+
 class BlackjackPlayAgainView(discord.ui.View):
     def __init__(self, ctx, bet):
         super().__init__(timeout=60)
@@ -325,8 +439,24 @@ class BlackjackPlayAgainView(discord.ui.View):
             button.disabled = True
             await interaction.response.edit_message(content="❌ Not enough beans to play again!", view=self)
             return
-        await interaction.response.defer()
-        await blackjack(self.ctx, self.bet)
+
+        deck, player_hand, dealer_hand = _bj_new_game()
+
+        if _bj_hand_value(player_hand) == 21:
+            winnings = int(self.bet * 1.5)
+            user.ajust_beans(winnings)
+            DataStorage.save_user_data()
+            embed = _bj_make_embed(player_hand, dealer_hand, hide_dealer=False,
+                                   result_text=f"🎰 BLACKJACK! +{winnings} beans")
+            new_view = BlackjackPlayAgainView(self.ctx, self.bet)
+            await interaction.response.edit_message(embed=embed, view=new_view)
+            new_view.message = interaction.message
+            return
+
+        new_view = BlackjackView(self.ctx, user, self.bet, deck, player_hand, dealer_hand)
+        await interaction.response.edit_message(
+            embed=_bj_make_embed(player_hand, dealer_hand, hide_dealer=True), view=new_view)
+        new_view.message = interaction.message
 
     async def on_timeout(self):
         for item in self.children:
@@ -346,128 +476,38 @@ async def blackjack(ctx, bet: int):
         await ctx.send(f"You don't have enough beans! Balance: {int(user.get_beans())}")
         return
 
-    def hand_value(hand):
-        total = sum(hand)
-        aces = hand.count(11)
-        while total > 21 and aces:
-            total -= 10
-            aces -= 1
-        return total
+    deck, player_hand, dealer_hand = _bj_new_game()
 
-    def hand_display(hand, hide_second=False):
-        face = lambda v: "A" if v == 11 else str(v)
-        if hide_second:
-            return f"{face(hand[0])}  🂠"
-        return "  ".join(face(v) for v in hand)
-
-    def make_embed(player, dealer, hide_dealer=True, result_text=None):
-        embed = discord.Embed(title="🃏 Blackjack", color=discord.Color.dark_green())
-        embed.add_field(name=f"Your Hand ({hand_value(player)})", value=hand_display(player), inline=False)
-        d_label = "Dealer's Hand" if hide_dealer else f"Dealer's Hand ({hand_value(dealer)})"
-        embed.add_field(name=d_label, value=hand_display(dealer, hide_second=hide_dealer), inline=False)
-        if result_text:
-            embed.add_field(name="Result", value=result_text, inline=False)
-        return embed
-
-    def resolve(player, dealer):
-        p, d = hand_value(player), hand_value(dealer)
-        if p > 21:
-            return -bet, "💥 Bust! You went over 21."
-        elif d > 21 or p > d:
-            return bet, "🎉 You win!"
-        elif p == d:
-            return 0, "🤝 Push — your bet is returned."
-        else:
-            return -bet, "💸 Dealer wins."
-
-    deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
-    random.shuffle(deck)
-    player_hand = [deck.pop(), deck.pop()]
-    dealer_hand = [deck.pop(), deck.pop()]
-
-    if hand_value(player_hand) == 21:
+    if _bj_hand_value(player_hand) == 21:
         winnings = int(bet * 1.5)
         user.ajust_beans(winnings)
         DataStorage.save_user_data()
-        embed = make_embed(player_hand, dealer_hand, hide_dealer=False,
-                           result_text=f"🎰 BLACKJACK! +{winnings} beans")
+        embed = _bj_make_embed(player_hand, dealer_hand, hide_dealer=False,
+                               result_text=f"🎰 BLACKJACK! +{winnings} beans")
         play_again_view = BlackjackPlayAgainView(ctx, bet)
         msg = await ctx.send(embed=embed, view=play_again_view)
         play_again_view.message = msg
         return
 
-    class BlackjackView(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=60)
-            self.message = None
-
-        async def end_game(self, interaction, final_player, final_dealer):
-            winnings, result_text = resolve(final_player, final_dealer)
-            user.ajust_beans(winnings)
-            DataStorage.save_user_data()
-            change = f"+{winnings}" if winnings >= 0 else str(winnings)
-            result_text += f"\n**{change} beans** → Balance: {int(user.get_beans())}"
-            embed = make_embed(final_player, final_dealer, hide_dealer=False, result_text=result_text)
-            self.stop()
-            play_again_view = BlackjackPlayAgainView(ctx, bet)
-            await interaction.response.edit_message(embed=embed, view=play_again_view)
-            play_again_view.message = interaction.message
-
-        @discord.ui.button(label="Hit", style=discord.ButtonStyle.green)
-        async def hit(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user.id != ctx.author.id:
-                await interaction.response.send_message("This isn't your game!", ephemeral=True)
-                return
-            player_hand.append(deck.pop())
-            pv = hand_value(player_hand)
-            if pv > 21:
-                await self.end_game(interaction, player_hand, dealer_hand)
-            elif pv == 21:
-                while hand_value(dealer_hand) < 17:
-                    dealer_hand.append(deck.pop())
-                await self.end_game(interaction, player_hand, dealer_hand)
-            else:
-                await interaction.response.edit_message(
-                    embed=make_embed(player_hand, dealer_hand, hide_dealer=True), view=self)
-
-        @discord.ui.button(label="Stand", style=discord.ButtonStyle.red)
-        async def stand(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user.id != ctx.author.id:
-                await interaction.response.send_message("This isn't your game!", ephemeral=True)
-                return
-            while hand_value(dealer_hand) < 17:
-                dealer_hand.append(deck.pop())
-            await self.end_game(interaction, player_hand, dealer_hand)
-
-        async def on_timeout(self):
-            while hand_value(dealer_hand) < 17:
-                dealer_hand.append(deck.pop())
-            winnings, result_text = resolve(player_hand, dealer_hand)
-            user.ajust_beans(winnings)
-            DataStorage.save_user_data()
-            embed = make_embed(player_hand, dealer_hand, hide_dealer=False,
-                               result_text=result_text + " (timed out)")
-            play_again_view = BlackjackPlayAgainView(ctx, bet)
-            play_again_view.message = self.message
-            if self.message:
-                await self.message.edit(embed=embed, view=play_again_view)
-
-    view = BlackjackView()
-    msg = await ctx.send(embed=make_embed(player_hand, dealer_hand, hide_dealer=True), view=view)
+    view = BlackjackView(ctx, user, bet, deck, player_hand, dealer_hand)
+    msg = await ctx.send(embed=_bj_make_embed(player_hand, dealer_hand, hide_dealer=True), view=view)
     view.message = msg
 
 
 async def lottery(ctx):
     """Show the current lottery pot and your ticket count."""
+    guild_id = str(ctx.guild.id)
     user = DataStorage.get_or_create_user(ctx.author.id)
-    tickets_held = DataStorage.lottery_entries.get(str(ctx.author.id), 0)
+    entries = DataStorage.get_lottery_entries(guild_id)
+    pot = DataStorage.get_lottery_pot(guild_id)
+    tickets_held = entries.get(str(ctx.author.id), 0)
     tickets_remaining = LOTTERY_MAX_TICKETS - tickets_held
-    total_tickets = sum(DataStorage.lottery_entries.values())
+    total_tickets = sum(entries.values())
 
     embed = discord.Embed(
         title="🎟️ Bean Lottery",
         description=(
-            f"**Pot:** {int(DataStorage.lottery_pot):,} beans\n"
+            f"**Pot:** {int(pot):,} beans\n"
             f"**Total tickets sold:** {total_tickets}\n"
             f"**Your tickets:** {tickets_held} / {LOTTERY_MAX_TICKETS}\n"
             f"**Ticket cost:** {LOTTERY_TICKET_COST} beans each"
@@ -477,11 +517,11 @@ async def lottery(ctx):
     embed.add_field(name="💰 Your Balance", value=f"{int(user.get_beans())} beans", inline=True)
     embed.add_field(name="🎫 Tickets Left to Buy", value=str(tickets_remaining), inline=True)
 
-    if DataStorage.lottery_entries:
-        top_entries = sorted(DataStorage.lottery_entries.items(), key=lambda x: x[1], reverse=True)[:10]
+    if entries:
+        top_entries = sorted(entries.items(), key=lambda x: x[1], reverse=True)[:10]
         lines = [f"<@{uid}> — {count} ticket(s)" for uid, count in top_entries]
-        total_entrants = len(DataStorage.lottery_entries)
-        field_name = f"🎫 Top Entrants" if total_entrants > 10 else "🎫 Current Entrants"
+        total_entrants = len(entries)
+        field_name = "🎫 Top Entrants" if total_entrants > 10 else "🎫 Current Entrants"
         footer_note = f"Showing top 10 of {total_entrants} entrants. " if total_entrants > 10 else ""
         embed.add_field(name=field_name, value="\n".join(lines), inline=False)
     else:
@@ -494,6 +534,7 @@ async def lottery(ctx):
 
 async def lottery_buy(ctx, amount: int):
     """Buy lottery tickets."""
+    guild_id = str(ctx.guild.id)
     user = DataStorage.get_or_create_user(ctx.author.id)
     user_id = str(ctx.author.id)
 
@@ -501,7 +542,8 @@ async def lottery_buy(ctx, amount: int):
         await ctx.send("Please specify a positive number of tickets.")
         return
 
-    tickets_held = DataStorage.lottery_entries.get(user_id, 0)
+    entries = DataStorage.get_lottery_entries(guild_id)
+    tickets_held = entries.get(user_id, 0)
     tickets_available = LOTTERY_MAX_TICKETS - tickets_held
 
     if tickets_available <= 0:
@@ -523,18 +565,19 @@ async def lottery_buy(ctx, amount: int):
         return
 
     user.ajust_beans(-total_cost)
-    DataStorage.lottery_entries[user_id] = tickets_held + amount
-    DataStorage.lottery_pot += total_cost
+    DataStorage.lottery_entries.setdefault(guild_id, {})[user_id] = tickets_held + amount
+    DataStorage.lottery_pot[guild_id] = DataStorage.get_lottery_pot(guild_id) + total_cost
     DataStorage.save_user_data()
     DataStorage.save_lottery()
 
+    new_tickets = DataStorage.lottery_entries[guild_id][user_id]
     embed = discord.Embed(
         title="🎟️ Tickets Purchased!",
         description=f"You bought **{amount}** ticket(s) for **{total_cost}** beans.",
         color=discord.Color.green()
     )
-    embed.add_field(name="Your Tickets", value=f"{DataStorage.lottery_entries[user_id]} / {LOTTERY_MAX_TICKETS}", inline=True)
-    embed.add_field(name="Current Pot", value=f"{int(DataStorage.lottery_pot):,} beans", inline=True)
+    embed.add_field(name="Your Tickets", value=f"{new_tickets} / {LOTTERY_MAX_TICKETS}", inline=True)
+    embed.add_field(name="Current Pot", value=f"{int(DataStorage.get_lottery_pot(guild_id)):,} beans", inline=True)
     embed.add_field(name="New Balance", value=f"{int(user.get_beans())} beans", inline=True)
     await ctx.send(embed=embed)
 
