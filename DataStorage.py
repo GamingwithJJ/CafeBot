@@ -167,9 +167,9 @@ def load_lottery():
             entries = data.get("entries", {})
             # Migrate old flat format: {"pot": float, "entries": {user_id: count}}
             if isinstance(pot, (int, float)):
-                lottery_pot = {}
-                lottery_entries = {}
-                print("⚠️ Old lottery format detected — resetting (per-server migration).")
+                lottery_pot = {LEGACY_GUILD_ID: float(pot)}
+                lottery_entries = {LEGACY_GUILD_ID: entries} if isinstance(entries, dict) else {}
+                print(f"⚠️ Old lottery format detected — migrated to guild {LEGACY_GUILD_ID}.")
             else:
                 lottery_pot = pot
                 lottery_entries = entries
