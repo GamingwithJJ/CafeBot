@@ -302,6 +302,7 @@ COMMAND_MODULES = {
             ("`.remove_trivia <category> <sub_category> <question>`", "Remove a question from the trivia bank by its exact text. Wrap fields containing spaces in quotes.", "bot_admin"),
             ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin"),
             ("`.admin_lottery_add <amount>`", "Add beans directly to the lottery pot to seed prize pool.", "bot_admin"),
+            ("`.admin_lottery_give <user> <amount>`", "Grant lottery tickets to a user without requiring bean payment.", "bot_admin"),
             ("`.force_lottery_draw`", "Draw a lottery winner and reset the pool", "bot_admin"),
             ("`.force_marry <user1> <user2>`", "Force two users into a marriage without mutual consent", "bot_admin"),
             ("`.force_divorce <user1> <user2>`", "Force dissolve a marriage between two users", "bot_admin"),
@@ -1105,6 +1106,12 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
 @is_authorized("bot_admin")
 async def admin_lottery_add(ctx, amount: int):
     await BotAdminModule.admin_lottery_add(ctx, amount)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def admin_lottery_give(ctx, target: discord.Member, amount: int):
+    await BotAdminModule.admin_lottery_give(ctx, target, amount)
 
 
 @bot.command()

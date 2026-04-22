@@ -336,6 +336,28 @@ async def admin_lottery_add(ctx, amount: int):
     await ctx.send(embed=embed)
 
 
+async def admin_lottery_give(ctx, target: discord.Member, amount: int):
+    """Grant lottery tickets to a user without requiring bean payment."""
+    if amount <= 0:
+        await ctx.send("Amount must be positive.")
+        return
+
+    guild_id = str(ctx.guild.id)
+    user_id = str(target.id)
+    DataStorage.lottery_entries.setdefault(guild_id, {})[user_id] = \
+        DataStorage.get_lottery_entries(guild_id).get(user_id, 0) + amount
+    DataStorage.save_lottery()
+
+    embed = discord.Embed(
+        title="🎟️ Tickets Granted",
+        description=f"Granted **{amount}** ticket(s) to {target.mention}.",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="Their Total", value=f"{DataStorage.lottery_entries[guild_id][user_id]} ticket(s)", inline=True)
+    embed.add_field(name="Current Pot", value=f"{int(DataStorage.get_lottery_pot(guild_id)):,} beans", inline=True)
+    await ctx.send(embed=embed)
+
+
 async def admin_user_info(ctx, target: discord.Member):
     """Display a full summary of a user's saved data."""
     user = DataStorage.get_or_create_user(target.id)
