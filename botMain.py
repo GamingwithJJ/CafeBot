@@ -306,7 +306,8 @@ COMMAND_MODULES = {
             ("`.force_marry <user1> <user2>`", "Force two users into a marriage without mutual consent", "bot_admin"),
             ("`.force_divorce <user1> <user2>`", "Force dissolve a marriage between two users", "bot_admin"),
             ("`.force_adopt <parent> <child>`", "Force an adoption relationship — first user becomes the parent", "bot_admin"),
-            ("`.force_unadopt <user1> <user2>`", "Force dissolve an adoption relationship between two users (order doesn't matter)", "bot_admin")
+            ("`.force_unadopt <user1> <user2>`", "Force dissolve an adoption relationship between two users (order doesn't matter)", "bot_admin"),
+            ("`.admin_user_info <user>`", "View a full summary of a user's economy, social, stats, and moderation data", "bot_admin")
         ]
     },
     "Testing": {
@@ -1126,6 +1127,12 @@ async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Memb
 @is_authorized("bot_admin")
 async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
     await BotAdminModule.force_unadopt(ctx, user1, user2)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def admin_user_info(ctx, target: discord.Member):
+    await BotAdminModule.admin_user_info(ctx, target)
 
 
 @bot.command()

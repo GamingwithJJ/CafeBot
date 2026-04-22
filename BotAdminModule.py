@@ -3,6 +3,7 @@ import DataStorage
 import discord
 from Classes.QuoteClass import Quote
 from Classes.Verse import Verse
+import EconomyModule
 
 
 async def add_gif(ctx, type: str, link: str):
@@ -328,6 +329,66 @@ async def admin_lottery_add(ctx, amount: int):
         color=discord.Color.gold()
     )
     embed.add_field(name="New Pot", value=f"{int(DataStorage.lottery_pot):,} beans")
+    await ctx.send(embed=embed)
+
+
+async def admin_user_info(ctx, target: discord.Member):
+    """Display a full summary of a user's saved data."""
+    user = DataStorage.get_or_create_user(target.id)
+    cap = EconomyModule.BANK_UPGRADE_TIERS[user.bank_level]
+
+    embed = discord.Embed(
+        title=f"🔍 User Info — {target.display_name}",
+        color=discord.Color.blurple()
+    )
+    embed.set_thumbnail(url=target.display_avatar.url)
+
+    # Economy
+    embed.add_field(
+        name="💰 Economy",
+        value=(
+            f"**Wallet:** {int(user.get_beans()):,} beans\n"
+            f"**Bank:** {int(user.bank_balance):,} / {cap:,} beans (Level {user.bank_level})"
+        ),
+        inline=False
+    )
+
+    # Social
+    spouses = ", ".join(f"<@{pid}>" for pid in user.marriage_partner) or "None"
+    children = ", ".join(f"<@{cid}>" for cid in user.adopted_children) or "None"
+    parents = ", ".join(f"<@{pid}>" for pid in user.adopted_by) or "None"
+    embed.add_field(
+        name="💍 Social",
+        value=(
+            f"**Spouses:** {spouses}\n"
+            f"**Children:** {children}\n"
+            f"**Parents:** {parents}\n"
+            f"**Total Marriages:** {user.total_marriages} | **Divorces:** {user.total_divorces}"
+        ),
+        inline=False
+    )
+
+    # Stats
+    last_shift = user.last_shift.strftime("%Y-%m-%d %H:%M") if user.last_shift else "Never"
+    last_daily = user.last_daily.strftime("%Y-%m-%d %H:%M") if user.last_daily else "Never"
+    embed.add_field(
+        name="📊 Stats",
+        value=(
+            f"**Daily Streak:** {user.daily_reward_streak}\n"
+            f"**Trivia Correct:** {user.trivia_correct}\n"
+            f"**Last Shift:** {last_shift}\n"
+            f"**Last Daily:** {last_daily}"
+        ),
+        inline=False
+    )
+
+    # Moderation
+    embed.add_field(
+        name="🔨 Moderation",
+        value=f"**Warnings:** {len(user.warnings)}",
+        inline=False
+    )
+
     await ctx.send(embed=embed)
 
 
