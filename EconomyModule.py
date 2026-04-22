@@ -14,7 +14,7 @@ LOTTERY_TICKET_COST = 50
 LOTTERY_MAX_TICKETS = 10
 
 BANK_UPGRADE_TIERS = [1000, 2000, 5000, 10000, 20000]
-BANK_UPGRADE_COSTS = [0, 600, 1600, 4000, 10000]
+BANK_UPGRADE_COSTS = [0, 300, 800, 2000, 5000]
 
 ROB_SUCCESS_RATE = 0.45
 ROB_STEAL_RANGE = (0.10, 0.25)
@@ -589,7 +589,6 @@ async def deposit(ctx, amount: int):
     user.ajust_beans(-amount)
     user.bank_balance = round(user.bank_balance + amount, 2)
     DataStorage.save_user_data()
-
     embed = discord.Embed(
         title="🏦 Deposit Successful",
         description=f"Deposited **{amount:,}** beans into your bank.",
