@@ -13,3 +13,4 @@ discord.py[voice]>=2.7.1
 yt-dlp
 imageio-ffmpeg
 yt-dlp-ejs
+Pillow

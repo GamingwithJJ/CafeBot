@@ -315,7 +315,7 @@ COMMAND_MODULES = {
         "description": "Commands currently in testing — bot admins only.",
         "emoji": "🧪",
         "commands": [
-            ("`.family_tree [user]`", "Render a bounded family tree around yourself or another user. Shows nearby parents, children, and partners with cycle protection", "bot_admin"),
+            ("`.family_tree [user]`", "Render a Pillow family-tree image around yourself or another user. Shows nearby parents, children, and partners with cycle protection", "bot_admin"),
             ("`.host_check`", "Diagnose the host machine's basic platform and architecture details", "bot_admin"),
             ("`.debug_music`", "Inspect local music-runtime dependencies like Node, FFmpeg, and cookies setup", "bot_admin"),
             ("`.debug_node`", "Test whether Node can run and report the installed yt-dlp version", "bot_admin")

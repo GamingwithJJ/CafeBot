@@ -3,10 +3,13 @@ import discord
 import random
 import DataStorage
 import asyncio
+import os
+import uuid
 from DataStorage import get_or_create_user
 from Classes.RequestClass import Request
 from Classes.UserSavesClass import User
 from collections import deque
+from PIL import Image, ImageDraw, ImageFont
 
 
 async def marry(ctx, member):
@@ -235,65 +238,261 @@ async def resolve_family_name(ctx, user_id: int) -> str:
     return member.display_name
 
 
-async def render_family_branch(ctx, graph: dict, user_id: int, branch_type: str,
-                               prefix: str, remaining_depth: int, seen: set) -> list[str]:
-    if remaining_depth <= 0:
-        return []
+async def build_family_name_map(ctx, graph: dict) -> dict[int, str]:
+    name_map = {}
+    for user_id in graph:
+        name_map[user_id] = await resolve_family_name(ctx, user_id)
+    return name_map
 
-    node = graph.get(user_id)
-    if not node:
-        return []
 
-    related_ids = node.get(branch_type, [])
+def choose_generation_level(existing_level: int | None, new_level: int) -> bool:
+    if existing_level is None:
+        return True
+    if abs(new_level) < abs(existing_level):
+        return True
+    if abs(new_level) == abs(existing_level) and new_level < existing_level:
+        return True
+    return False
+
+
+def compute_family_levels(root_id: int, graph: dict) -> dict[int, int]:
+    levels = {root_id: 0}
+    queue = deque([root_id])
+
+    while queue:
+        user_id = queue.popleft()
+        level = levels[user_id]
+        rels = graph.get(user_id, {"parents": [], "children": [], "partners": []})
+
+        for partner_id in rels["partners"]:
+            if partner_id in graph and choose_generation_level(levels.get(partner_id), level):
+                levels[partner_id] = level
+                queue.append(partner_id)
+
+        for parent_id in rels["parents"]:
+            if parent_id in graph and choose_generation_level(levels.get(parent_id), level - 1):
+                levels[parent_id] = level - 1
+                queue.append(parent_id)
+
+        for child_id in rels["children"]:
+            if child_id in graph and choose_generation_level(levels.get(child_id), level + 1):
+                levels[child_id] = level + 1
+                queue.append(child_id)
+
+    return levels
+
+
+def get_level_label(level: int, root_id: int, user_id: int) -> str:
+    if user_id == root_id:
+        return "You"
+    if level == 0:
+        return "Partner Tier"
+    if level < 0:
+        return f"Gen {level}"
+    return f"Gen +{level}"
+
+
+def load_family_fonts() -> tuple:
+    try:
+        title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 28)
+        name_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 18)
+        meta_font = ImageFont.truetype("DejaVuSans.ttf", 13)
+    except OSError:
+        title_font = ImageFont.load_default()
+        name_font = ImageFont.load_default()
+        meta_font = ImageFont.load_default()
+    return title_font, name_font, meta_font
+
+
+def wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    words = text.split()
+    if not words:
+        return [text]
+
     lines = []
+    current = words[0]
 
-    for index, related_id in enumerate(related_ids):
-        connector = "└─" if index == len(related_ids) - 1 else "├─"
-        child_prefix = prefix + ("   " if index == len(related_ids) - 1 else "│  ")
-        display_name = await resolve_family_name(ctx, related_id)
-        repeated = related_id in seen
-        lines.append(f"{prefix}{connector} {display_name}{' (seen)' if repeated else ''}")
+    for word in words[1:]:
+        trial = f"{current} {word}"
+        bbox = draw.textbbox((0, 0), trial, font=name_font if False else font)
+        if bbox[2] - bbox[0] <= max_width:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
 
-        if repeated:
+    lines.append(current)
+    return lines[:2]
+
+
+def build_family_rows(root_id: int, graph: dict, levels: dict[int, int], name_map: dict[int, str]) -> list[tuple[int, list[int]]]:
+    row_map = {}
+    for user_id in graph:
+        level = levels.get(user_id, 0)
+        row_map.setdefault(level, []).append(user_id)
+
+    rows = []
+    for level in sorted(row_map):
+        ids = row_map[level]
+        if level == 0:
+            partners = sorted([user_id for user_id in ids if user_id != root_id], key=lambda uid: name_map[uid].lower())
+            ordered = [root_id] + partners if root_id in ids else partners
+        else:
+            ordered = sorted(ids, key=lambda uid: name_map[uid].lower())
+        rows.append((level, ordered))
+    return rows
+
+
+def layout_family_cards(rows: list[tuple[int, list[int]]], canvas_width: int, top_y: int,
+                        card_width: int, card_height: int, card_gap: int, row_gap: int) -> tuple[dict[int, tuple[int, int, int, int]], int]:
+    positions = {}
+    current_y = top_y
+
+    for _level, row_ids in rows:
+        row_width = len(row_ids) * card_width + max(0, len(row_ids) - 1) * card_gap
+        start_x = max(40, (canvas_width - row_width) // 2)
+
+        for index, user_id in enumerate(row_ids):
+            x1 = start_x + index * (card_width + card_gap)
+            y1 = current_y
+            positions[user_id] = (x1, y1, x1 + card_width, y1 + card_height)
+
+        current_y += card_height + row_gap
+
+    return positions, current_y
+
+
+def get_card_colors(level: int, root_id: int, user_id: int) -> tuple[str, str, str]:
+    if user_id == root_id:
+        return "#D8F3DC", "#2D6A4F", "#1B4332"
+    if level < 0:
+        return "#E8F0FE", "#5B7DB1", "#294172"
+    if level > 0:
+        return "#FFF4CC", "#C49A32", "#7A5A00"
+    return "#FDE7D9", "#C97A40", "#7A4420"
+
+
+def draw_connector(draw: ImageDraw.ImageDraw, start: tuple[int, int], end: tuple[int, int], fill: str, width: int = 4):
+    sx, sy = start
+    ex, ey = end
+    mid_y = (sy + ey) // 2
+    draw.line((sx, sy, sx, mid_y), fill=fill, width=width)
+    draw.line((sx, mid_y, ex, mid_y), fill=fill, width=width)
+    draw.line((ex, mid_y, ex, ey), fill=fill, width=width)
+
+
+def draw_family_edges(draw: ImageDraw.ImageDraw, graph: dict, positions: dict[int, tuple[int, int, int, int]]):
+    edge_color = "#9E8F7A"
+    partner_pairs = set()
+
+    for user_id, rels in graph.items():
+        if user_id not in positions:
             continue
 
-        seen.add(related_id)
-        lines.extend(await render_family_branch(
-            ctx,
-            graph,
-            related_id,
-            branch_type,
-            child_prefix,
-            remaining_depth - 1,
-            seen
-        ))
+        x1, y1, x2, y2 = positions[user_id]
+        user_center_x = (x1 + x2) // 2
 
-    return lines
+        for child_id in rels["children"]:
+            if child_id not in positions:
+                continue
+
+            child_box = positions[child_id]
+            child_center_x = (child_box[0] + child_box[2]) // 2
+            draw_connector(draw, (user_center_x, y2), (child_center_x, child_box[1]), edge_color, width=4)
+
+        for partner_id in rels["partners"]:
+            if partner_id not in positions:
+                continue
+            pair = tuple(sorted((user_id, partner_id)))
+            if pair in partner_pairs:
+                continue
+            partner_pairs.add(pair)
+
+            px1, py1, px2, py2 = positions[partner_id]
+            left_box = positions[pair[0]]
+            right_box = positions[pair[1]]
+            if left_box[0] > right_box[0]:
+                left_box, right_box = right_box, left_box
+
+            line_y = (left_box[1] + left_box[3]) // 2
+            draw.line((left_box[2], line_y, right_box[0], line_y), fill="#C67B5C", width=5)
+            midpoint_x = (left_box[2] + right_box[0]) // 2
+            draw.ellipse((midpoint_x - 4, line_y - 4, midpoint_x + 4, line_y + 4), fill="#C67B5C")
 
 
-async def render_family_tree(ctx, root_id: int, graph: dict, max_up: int = 2, max_down: int = 2) -> str:
-    root_name = await resolve_family_name(ctx, root_id)
-    root_node = graph.get(root_id, {"parents": [], "children": [], "partners": []})
-    lines = [root_name]
+def draw_family_cards(draw: ImageDraw.ImageDraw, graph: dict, positions: dict[int, tuple[int, int, int, int]],
+                      levels: dict[int, int], root_id: int, name_map: dict[int, str], name_font, meta_font):
+    for user_id, box in positions.items():
+        x1, y1, x2, y2 = box
+        fill_color, border_color, accent_color = get_card_colors(levels.get(user_id, 0), root_id, user_id)
+        draw.rounded_rectangle(box, radius=18, fill=fill_color, outline=border_color, width=3)
+        draw.rounded_rectangle((x1 + 10, y1 + 10, x1 + 26, y2 - 10), radius=8, fill=accent_color)
 
-    if root_node["partners"]:
-        partner_names = [await resolve_family_name(ctx, partner_id) for partner_id in root_node["partners"]]
-        lines.append(f"├─ Partners: {', '.join(partner_names)}")
+        name_lines = wrap_text(draw, name_map[user_id], name_font, max_width=(x2 - x1) - 56)
+        header = get_level_label(levels.get(user_id, 0), root_id, user_id)
+        rels = graph[user_id]
+        meta_parts = []
+        if rels["partners"]:
+            meta_parts.append(f"{len(rels['partners'])} partner{'s' if len(rels['partners']) != 1 else ''}")
+        if rels["children"]:
+            meta_parts.append(f"{len(rels['children'])} child{'ren' if len(rels['children']) != 1 else ''}")
+        if rels["parents"]:
+            meta_parts.append(f"{len(rels['parents'])} parent{'s' if len(rels['parents']) != 1 else ''}")
+        meta_text = " • ".join(meta_parts) if meta_parts else "No linked family"
 
-    if root_node["parents"]:
-        lines.append("├─ Parents")
-        parent_seen = {root_id}
-        lines.extend(await render_family_branch(ctx, graph, root_id, "parents", "│  ", max_up, parent_seen))
+        text_x = x1 + 38
+        current_y = y1 + 14
+        for line in name_lines:
+            draw.text((text_x, current_y), line, font=name_font, fill="#2C241D")
+            line_box = draw.textbbox((text_x, current_y), line, font=name_font)
+            current_y = line_box[3] + 2
 
-    if root_node["children"]:
-        lines.append("└─ Children")
-        child_seen = {root_id}
-        lines.extend(await render_family_branch(ctx, graph, root_id, "children", "   ", max_down, child_seen))
+        draw.text((text_x, current_y + 2), header, font=meta_font, fill=accent_color)
+        draw.text((text_x, current_y + 20), meta_text, font=meta_font, fill="#5E5348")
 
-    if len(lines) == 1:
-        lines.append("└─ No family relationships found.")
 
-    return "\n".join(lines)
+async def render_family_tree_image(ctx, root_id: int, graph: dict) -> str:
+    title_font, name_font, meta_font = load_family_fonts()
+    name_map = await build_family_name_map(ctx, graph)
+    levels = compute_family_levels(root_id, graph)
+    rows = build_family_rows(root_id, graph, levels, name_map)
+
+    card_width = 220
+    card_height = 92
+    card_gap = 44
+    row_gap = 96
+    side_margin = 80
+    title_height = 110
+    footer_height = 60
+
+    widest_row = max((len(row_ids) for _level, row_ids in rows), default=1)
+    canvas_width = max(900, widest_row * card_width + max(0, widest_row - 1) * card_gap + side_margin * 2)
+    positions, bottom_y = layout_family_cards(
+        rows,
+        canvas_width,
+        title_height,
+        card_width,
+        card_height,
+        card_gap,
+        row_gap
+    )
+    canvas_height = bottom_y + footer_height
+
+    image = Image.new("RGB", (canvas_width, canvas_height), "#FBF7F2")
+    draw = ImageDraw.Draw(image)
+
+    draw.rounded_rectangle((24, 24, canvas_width - 24, canvas_height - 24), radius=28, outline="#D8C8B8", width=3)
+    title = f"Family Tree: {name_map.get(root_id, 'Unknown')}"
+    subtitle = "Parents above, children below, partners linked on the same generation."
+    draw.text((48, 38), title, font=title_font, fill="#3F2D21")
+    draw.text((50, 74), subtitle, font=meta_font, fill="#7A6859")
+
+    draw_family_edges(draw, graph, positions)
+    draw_family_cards(draw, graph, positions, levels, root_id, name_map, name_font, meta_font)
+
+    output_path = os.path.join("Saves", f"family_tree_{root_id}_{uuid.uuid4().hex}.png")
+    image.save(output_path)
+    return output_path
 
 
 async def family_tree(ctx, member: discord.Member = None):
@@ -309,19 +508,32 @@ async def family_tree(ctx, member: discord.Member = None):
         include_partners=True,
         max_nodes=max_nodes
     )
-    tree_text = await render_family_tree(ctx, target.id, graph, max_up=max_up, max_down=max_down)
+    if len(graph) == 1 and not graph[target.id]["parents"] and not graph[target.id]["children"] and not graph[target.id]["partners"]:
+        embed = discord.Embed(
+            title="👨‍👩‍👧 No Family Found",
+            description="This user doesn't have any saved family relationships yet.",
+            color=discord.Color.light_gray()
+        )
+        await ctx.send(embed=embed)
+        return
 
-    embed = discord.Embed(
-        title=f"🌳 Family Tree for {target.display_name}",
-        description=f"```text\n{tree_text}\n```",
-        color=discord.Color.green()
-    )
+    try:
+        image_path = await render_family_tree_image(ctx, target.id, graph)
+    except Exception as exc:
+        await ctx.send(f"❌ I couldn't render the family tree image. Renderer error: `{exc}`")
+        return
 
     footer = f"Showing up to {max_up} generations up, {max_down} down, and {max_nodes} total people."
     if truncated:
         footer += " Results were trimmed to keep the tree readable."
+
+    embed = discord.Embed(
+        title=f"🌳 Family Tree for {target.display_name}",
+        description="Rendered with Pillow.",
+        color=discord.Color.green()
+    )
     embed.set_footer(text=footer)
-    await ctx.send(embed=embed)
+    await ctx.send(embed=embed, file=discord.File(image_path, filename="family_tree.png"))
 
 
 async def duel(ctx, target: discord.Member):
