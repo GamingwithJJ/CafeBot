@@ -6,6 +6,7 @@ import asyncio
 from DataStorage import get_or_create_user
 from Classes.RequestClass import Request
 from Classes.UserSavesClass import User
+from collections import deque
 
 
 async def marry(ctx, member):
@@ -161,6 +162,165 @@ async def family(ctx):
         embed.add_field(name=f"🧒 Children ({len(children)})", value=mentions, inline=False)
 
     embed.set_footer(text="CafeBot Family Registry | ☕")
+    await ctx.send(embed=embed)
+
+
+def get_family_neighbors(user_id: int) -> dict:
+    user = DataStorage.get_or_create_user(user_id)
+    return {
+        "parents": list(user.get_adopted_by()),
+        "children": list(user.get_adopted_children()),
+        "partners": list(user.get_marriage_partners()),
+    }
+
+
+def build_family_subgraph(
+    root_id: int,
+    max_up: int = 2,
+    max_down: int = 2,
+    include_partners: bool = True,
+    max_nodes: int = 25
+) -> tuple[dict, bool]:
+    graph = {}
+    visited = set()
+    queue = deque([(root_id, 0, 0)])
+    truncated = False
+
+    while queue:
+        if len(graph) >= max_nodes:
+            truncated = True
+            break
+
+        user_id, up_depth, down_depth = queue.popleft()
+
+        if user_id in visited:
+            continue
+
+        visited.add(user_id)
+        neighbors = get_family_neighbors(user_id)
+        graph[user_id] = neighbors
+
+        if include_partners:
+            for partner_id in neighbors["partners"]:
+                if partner_id not in visited:
+                    queue.append((partner_id, up_depth, down_depth))
+
+        if up_depth < max_up:
+            for parent_id in neighbors["parents"]:
+                if parent_id not in visited:
+                    queue.append((parent_id, up_depth + 1, down_depth))
+
+        if down_depth < max_down:
+            for child_id in neighbors["children"]:
+                if child_id not in visited:
+                    queue.append((child_id, up_depth, down_depth + 1))
+
+    if queue:
+        truncated = True
+
+    return graph, truncated
+
+
+async def resolve_family_name(ctx, user_id: int) -> str:
+    member = None
+    if getattr(ctx, "guild", None):
+        member = ctx.guild.get_member(user_id)
+    if member is None:
+        member = ctx.bot.get_user(user_id)
+    if member is None:
+        try:
+            member = await ctx.bot.fetch_user(user_id)
+        except Exception:
+            return f"Unknown({user_id})"
+    return member.display_name
+
+
+async def render_family_branch(ctx, graph: dict, user_id: int, branch_type: str,
+                               prefix: str, remaining_depth: int, seen: set) -> list[str]:
+    if remaining_depth <= 0:
+        return []
+
+    node = graph.get(user_id)
+    if not node:
+        return []
+
+    related_ids = node.get(branch_type, [])
+    lines = []
+
+    for index, related_id in enumerate(related_ids):
+        connector = "└─" if index == len(related_ids) - 1 else "├─"
+        child_prefix = prefix + ("   " if index == len(related_ids) - 1 else "│  ")
+        display_name = await resolve_family_name(ctx, related_id)
+        repeated = related_id in seen
+        lines.append(f"{prefix}{connector} {display_name}{' (seen)' if repeated else ''}")
+
+        if repeated:
+            continue
+
+        seen.add(related_id)
+        lines.extend(await render_family_branch(
+            ctx,
+            graph,
+            related_id,
+            branch_type,
+            child_prefix,
+            remaining_depth - 1,
+            seen
+        ))
+
+    return lines
+
+
+async def render_family_tree(ctx, root_id: int, graph: dict, max_up: int = 2, max_down: int = 2) -> str:
+    root_name = await resolve_family_name(ctx, root_id)
+    root_node = graph.get(root_id, {"parents": [], "children": [], "partners": []})
+    lines = [root_name]
+
+    if root_node["partners"]:
+        partner_names = [await resolve_family_name(ctx, partner_id) for partner_id in root_node["partners"]]
+        lines.append(f"├─ Partners: {', '.join(partner_names)}")
+
+    if root_node["parents"]:
+        lines.append("├─ Parents")
+        parent_seen = {root_id}
+        lines.extend(await render_family_branch(ctx, graph, root_id, "parents", "│  ", max_up, parent_seen))
+
+    if root_node["children"]:
+        lines.append("└─ Children")
+        child_seen = {root_id}
+        lines.extend(await render_family_branch(ctx, graph, root_id, "children", "   ", max_down, child_seen))
+
+    if len(lines) == 1:
+        lines.append("└─ No family relationships found.")
+
+    return "\n".join(lines)
+
+
+async def family_tree(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    max_up = 2
+    max_down = 2
+    max_nodes = 25
+
+    graph, truncated = build_family_subgraph(
+        target.id,
+        max_up=max_up,
+        max_down=max_down,
+        include_partners=True,
+        max_nodes=max_nodes
+    )
+    tree_text = await render_family_tree(ctx, target.id, graph, max_up=max_up, max_down=max_down)
+
+    embed = discord.Embed(
+        title=f"🌳 Family Tree for {target.display_name}",
+        description=f"```text\n{tree_text}\n```",
+        color=discord.Color.green()
+    )
+
+    footer = f"Showing up to {max_up} generations up, {max_down} down, and {max_nodes} total people."
+    if truncated:
+        footer += " Results were trimmed to keep the tree readable."
+    embed.set_footer(text=footer)
     await ctx.send(embed=embed)
 
 

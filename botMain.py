@@ -314,7 +314,12 @@ COMMAND_MODULES = {
     "Testing": {
         "description": "Commands currently in testing — bot admins only.",
         "emoji": "🧪",
-        "commands": []
+        "commands": [
+            ("`.family_tree [user]`", "Render a bounded family tree around yourself or another user. Shows nearby parents, children, and partners with cycle protection", "bot_admin"),
+            ("`.host_check`", "Diagnose the host machine's basic platform and architecture details", "bot_admin"),
+            ("`.debug_music`", "Inspect local music-runtime dependencies like Node, FFmpeg, and cookies setup", "bot_admin"),
+            ("`.debug_node`", "Test whether Node can run and report the installed yt-dlp version", "bot_admin")
+        ]
     }
 }
 
@@ -524,6 +529,12 @@ async def unadopt(ctx, target_user: discord.Member):
 @is_authorized("any")
 async def family(ctx):
     await FunModule.family(ctx)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def family_tree(ctx, member: discord.Member = None):
+    await FunModule.family_tree(ctx, member)
 
 
 @bot.command()
@@ -1446,6 +1457,13 @@ async def slash_family(interaction: discord.Interaction):
     if not await slash_auth_check(interaction, "any"): return
     ctx = InteractionContext(interaction)
     await FunModule.family(ctx)
+
+
+@bot.tree.command(name="family_tree", description="Render a bounded family tree for yourself or another user")
+async def slash_family_tree(interaction: discord.Interaction, target_user: Optional[discord.Member] = None):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await FunModule.family_tree(ctx, target_user)
 
 
 @bot.tree.command(name="duel", description="Start a turn-based duel against another user")
