@@ -11,7 +11,8 @@ BEANS_PER_BREW = (10, 50) # Range between the two numbers
 DAILY_REWARD_BASE = 100
 
 LOTTERY_TICKET_COST = 50
-LOTTERY_MAX_TICKETS = 10
+
+bot = None  # Set by botMain after bot is created; used for auto-draw channel lookup
 
 BANK_UPGRADE_TIERS = [1000, 2000, 5000, 10000, 20000]
 BANK_UPGRADE_COSTS = [0, 300, 800, 2000, 5000]
@@ -494,23 +495,84 @@ async def blackjack(ctx, bet: int):
     view.message = msg
 
 
+async def _execute_lottery_draw(guild_id, channel):
+    """Draw a winner, award the pot, and reset lottery state. Posts result to channel."""
+    guild_id = str(guild_id)
+    entries = DataStorage.get_lottery_entries(guild_id)
+    pot = DataStorage.get_lottery_pot(guild_id)
+
+    population = list(entries.keys())
+    weights = [entries[uid] for uid in population]
+    winner_id = random.choices(population, weights=weights, k=1)[0]
+
+    winner_data = DataStorage.get_or_create_user(int(winner_id))
+    winner_data.ajust_beans(pot)
+
+    DataStorage.lottery_pot[guild_id] = 0.0
+    DataStorage.lottery_entries[guild_id] = {}
+    DataStorage.lottery_active.pop(guild_id, None)
+    DataStorage.save_user_data()
+    DataStorage.save_lottery()
+
+    embed = discord.Embed(
+        title="🎉 Lottery Draw!",
+        description=f"<@{winner_id}> won the lottery and took home **{int(pot):,} beans**!",
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text="The pot has been reset. Start a new lottery with .admin_lottery_start!")
+    await channel.send(embed=embed)
+
+
 async def lottery(ctx):
     """Show the current lottery pot and your ticket count."""
     guild_id = str(ctx.guild.id)
     user = DataStorage.get_or_create_user(ctx.author.id)
     entries = DataStorage.get_lottery_entries(guild_id)
     pot = DataStorage.get_lottery_pot(guild_id)
+    active = DataStorage.get_lottery_active(guild_id)
     tickets_held = entries.get(str(ctx.author.id), 0)
-    tickets_remaining = LOTTERY_MAX_TICKETS - tickets_held
     total_tickets = sum(entries.values())
+
+    if not active:
+        embed = discord.Embed(
+            title="🎟️ Bean Lottery",
+            description="**No lottery is currently running.**\nAn admin can start one with `.admin_lottery_start`.",
+            color=discord.Color.greyple()
+        )
+        if pot > 0 or entries:
+            embed.add_field(name="Lingering Pot", value=f"{int(pot):,} beans", inline=True)
+            embed.add_field(name="Tickets Sold", value=str(total_tickets), inline=True)
+        await ctx.send(embed=embed)
+        return
+
+    max_per_user = active["max_per_user"]
+    ticket_cap = active.get("ticket_cap")
+    end_time = active.get("end_time")
+    tickets_remaining = max_per_user - tickets_held
+
+    cap_display = f"{total_tickets} / {ticket_cap}" if ticket_cap else f"{total_tickets} (no cap)"
+
+    if end_time:
+        end_dt = datetime.datetime.fromisoformat(end_time)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        remaining_secs = max(0, int((end_dt - now).total_seconds()))
+        if remaining_secs >= 3600:
+            time_display = f"{remaining_secs // 3600}h {(remaining_secs % 3600) // 60}m remaining"
+        elif remaining_secs >= 60:
+            time_display = f"{remaining_secs // 60}m {remaining_secs % 60}s remaining"
+        else:
+            time_display = f"{remaining_secs}s remaining"
+    else:
+        time_display = "No time limit"
 
     embed = discord.Embed(
         title="🎟️ Bean Lottery",
         description=(
             f"**Pot:** {int(pot):,} beans\n"
-            f"**Total tickets sold:** {total_tickets}\n"
-            f"**Your tickets:** {tickets_held} / {LOTTERY_MAX_TICKETS}\n"
-            f"**Ticket cost:** {LOTTERY_TICKET_COST} beans each"
+            f"**Tickets sold:** {cap_display}\n"
+            f"**Your tickets:** {tickets_held} / {max_per_user}\n"
+            f"**Ticket cost:** {LOTTERY_TICKET_COST} beans each\n"
+            f"**Time:** {time_display}"
         ),
         color=discord.Color.gold()
     )
@@ -538,16 +600,22 @@ async def lottery_buy(ctx, amount: int):
     user = DataStorage.get_or_create_user(ctx.author.id)
     user_id = str(ctx.author.id)
 
+    active = DataStorage.get_lottery_active(guild_id)
+    if not active:
+        await ctx.send("No lottery is currently running. Wait for an admin to start one!")
+        return
+
     if amount <= 0:
         await ctx.send("Please specify a positive number of tickets.")
         return
 
+    max_per_user = active["max_per_user"]
     entries = DataStorage.get_lottery_entries(guild_id)
     tickets_held = entries.get(user_id, 0)
-    tickets_available = LOTTERY_MAX_TICKETS - tickets_held
+    tickets_available = max_per_user - tickets_held
 
     if tickets_available <= 0:
-        await ctx.send(f"You already have the maximum of {LOTTERY_MAX_TICKETS} tickets this round!")
+        await ctx.send(f"You already have the maximum of {max_per_user} tickets this round!")
         return
 
     if amount > tickets_available:
@@ -571,15 +639,23 @@ async def lottery_buy(ctx, amount: int):
     DataStorage.save_lottery()
 
     new_tickets = DataStorage.lottery_entries[guild_id][user_id]
+    total_tickets = sum(DataStorage.lottery_entries[guild_id].values())
     embed = discord.Embed(
         title="🎟️ Tickets Purchased!",
         description=f"You bought **{amount}** ticket(s) for **{total_cost}** beans.",
         color=discord.Color.green()
     )
-    embed.add_field(name="Your Tickets", value=f"{new_tickets} / {LOTTERY_MAX_TICKETS}", inline=True)
+    embed.add_field(name="Your Tickets", value=f"{new_tickets} / {max_per_user}", inline=True)
     embed.add_field(name="Current Pot", value=f"{int(DataStorage.get_lottery_pot(guild_id)):,} beans", inline=True)
     embed.add_field(name="New Balance", value=f"{int(user.get_beans())} beans", inline=True)
     await ctx.send(embed=embed)
+
+    ticket_cap = active.get("ticket_cap")
+    if ticket_cap and total_tickets >= ticket_cap:
+        channel = bot.get_channel(int(active["channel_id"]))
+        if channel:
+            await channel.send("🎰 All tickets sold! Drawing the winner now...")
+            await _execute_lottery_draw(guild_id, channel)
 
 
 async def bank(ctx):

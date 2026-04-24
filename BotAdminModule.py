@@ -1,9 +1,49 @@
+import asyncio
 import random
+import datetime
+import difflib
 import DataStorage
 import discord
 from Classes.QuoteClass import Quote
 from Classes.Verse import Verse
 import EconomyModule
+
+
+def _fuzzy_find(query: str, candidates: list) -> str | None:
+    if not candidates:
+        return None
+    query_lower = query.lower()
+    best = max(candidates, key=lambda c: difflib.SequenceMatcher(None, query_lower, c.lower()).ratio())
+    return best
+
+
+async def _confirm_removal(ctx, embed: discord.Embed) -> bool:
+    embed.set_footer(text="React ✅ to confirm, ❌ to cancel (30s)")
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction("✅")
+    await msg.add_reaction("❌")
+
+    def check(reaction, user):
+        return user == ctx.author and reaction.message.id == msg.id and str(reaction.emoji) in ("✅", "❌")
+
+    try:
+        reaction, _ = await ctx.bot.wait_for("reaction_add", timeout=30.0, check=check)
+        return str(reaction.emoji) == "✅"
+    except asyncio.TimeoutError:
+        await ctx.send("Cancelled (timed out).")
+        return False
+
+
+def _format_duration(seconds):
+    if seconds >= 86400:
+        days = seconds // 86400
+        hours = (seconds % 86400) // 3600
+        return f"{days}d {hours}h" if hours else f"{days}d"
+    if seconds >= 3600:
+        hours = seconds // 3600
+        mins = (seconds % 3600) // 60
+        return f"{hours}h {mins}m" if mins else f"{hours}h"
+    return f"{seconds // 60}m"
 
 
 async def add_gif(ctx, type: str, link: str):
@@ -63,21 +103,28 @@ async def add_gif_message(ctx, type: str, message: str):
 
 
 async def remove_gif_message(ctx, type: str, message: str):
-    """Removes a message template from a gif emote category by exact text."""
     type = type.lower()
 
     if type not in DataStorage.gif_messages:
         await ctx.send(f"❌ No gif category named `{type}` found.")
         return
 
-    for index, msg in enumerate(DataStorage.gif_messages[type]):
-        if msg == message:
-            DataStorage.gif_messages[type].pop(index)
-            DataStorage.save_gif_messages()
-            await ctx.send(f"✅ Removed message from `{type}`.")
-            return
+    candidates = DataStorage.gif_messages[type]
+    matched = _fuzzy_find(message, candidates)
+    if matched is None:
+        await ctx.send(f"❌ No messages found in `{type}`.")
+        return
 
-    await ctx.send("❌ Could not find that exact message in this category.")
+    embed = discord.Embed(title="🔍 Closest Match Found", color=discord.Color.orange())
+    embed.add_field(name="Category", value=f"`{type}`", inline=True)
+    embed.add_field(name="Message", value=matched, inline=False)
+
+    if await _confirm_removal(ctx, embed):
+        DataStorage.gif_messages[type].remove(matched)
+        DataStorage.save_gif_messages()
+        await ctx.send(f"✅ Removed message from `{type}`.")
+    else:
+        await ctx.send("❌ Removal cancelled.")
 
 
 async def add_quote(ctx, authors, quote):
@@ -114,7 +161,6 @@ async def add_quote(ctx, authors, quote):
 
 
 async def remove_quote(ctx, quote_to_remove: str):
-    """Removes a quote by its text content."""
     if ctx.guild is None:
         await ctx.send("❌ Quote commands can't be used in DMs.")
         return
@@ -122,15 +168,29 @@ async def remove_quote(ctx, quote_to_remove: str):
     guild_id = str(ctx.guild.id)
     guild_quotes = DataStorage.quotes.get(guild_id, {})
 
-    for author, quote_list in guild_quotes.items():
-        for index, quote_obj in enumerate(quote_list):
-            if quote_obj.get_text() == quote_to_remove:
-                quote_list.pop(index)
-                DataStorage.save_quotes()
-                await ctx.send(f"✅ Removed quote from {author}!")
-                return
+    all_entries = [(quote_obj.get_text(), author, quote_obj)
+                   for author, quote_list in guild_quotes.items()
+                   for quote_obj in quote_list]
 
-    await ctx.send("❌ Could not find that quote.")
+    if not all_entries:
+        await ctx.send("❌ No quotes found.")
+        return
+
+    matched_text, matched_author, matched_obj = max(
+        all_entries,
+        key=lambda e: difflib.SequenceMatcher(None, quote_to_remove.lower(), e[0].lower()).ratio()
+    )
+
+    embed = discord.Embed(title="🔍 Closest Match Found", color=discord.Color.orange())
+    embed.add_field(name="Quote", value=matched_text, inline=False)
+    embed.add_field(name="Author", value=matched_author, inline=True)
+
+    if await _confirm_removal(ctx, embed):
+        guild_quotes[matched_author].remove(matched_obj)
+        DataStorage.save_quotes()
+        await ctx.send(f"✅ Removed quote from {matched_author}!")
+    else:
+        await ctx.send("❌ Removal cancelled.")
 
 
 async def add_eight_ball(ctx, response: str):
@@ -143,13 +203,20 @@ async def add_eight_ball(ctx, response: str):
 
 
 async def remove_eight_ball(ctx, response_to_remove: str):
-    for index, response in enumerate(DataStorage.magic_eight_ball):
-        if response == response_to_remove:
-            DataStorage.magic_eight_ball.pop(index)
-            DataStorage.save_eight_ball()
-            await ctx.send(f"✅Removed Response!")
-            return
-    await ctx.send("Could not find specified response")
+    matched = _fuzzy_find(response_to_remove, DataStorage.magic_eight_ball)
+    if matched is None:
+        await ctx.send("❌ No 8-ball responses found.")
+        return
+
+    embed = discord.Embed(title="🔍 Closest Match Found", color=discord.Color.orange())
+    embed.add_field(name="Response", value=matched, inline=False)
+
+    if await _confirm_removal(ctx, embed):
+        DataStorage.magic_eight_ball.remove(matched)
+        DataStorage.save_eight_ball()
+        await ctx.send("✅ Removed response!")
+    else:
+        await ctx.send("❌ Removal cancelled.")
 
 
 async def add_trivia(ctx, category: str, sub_category: str, question: str, answers: str):
@@ -182,29 +249,45 @@ async def add_trivia(ctx, category: str, sub_category: str, question: str, answe
 
 
 async def remove_trivia(ctx, category: str, sub_category: str, question: str):
-    """
-    Removes a trivia question from the bank by matching the question text.
-    """
     category = category.lower()
     sub_category = sub_category.lower()
 
     if category not in DataStorage.trivia_questions:
-        await ctx.send(f"Category **{category.capitalize()}** not found.")
+        await ctx.send(f"❌ Category **{category.capitalize()}** not found.")
         return
 
-    if sub_category not in DataStorage.trivia_questions[category]:
-        await ctx.send(f"Sub-category **{sub_category.capitalize()}** not found in **{category.capitalize()}**.")
+    # Determine search scope: specified sub-category first, then all of main category
+    if sub_category in DataStorage.trivia_questions[category]:
+        search_entries = [(e, sub_category) for e in DataStorage.trivia_questions[category][sub_category]]
+    else:
+        await ctx.send(f"⚠️ Sub-category **{sub_category.capitalize()}** not found in **{category.capitalize()}**. Searching all of **{category.capitalize()}**...")
+        search_entries = [
+            (e, sc)
+            for sc, entries in DataStorage.trivia_questions[category].items()
+            for e in entries
+        ]
+
+    if not search_entries:
+        await ctx.send("❌ No trivia questions found in that category.")
         return
 
-    questions = DataStorage.trivia_questions[category][sub_category]
-    for index, entry in enumerate(questions):
-        if entry[0].lower() == question.lower():
-            questions.pop(index)
-            DataStorage.save_trivia_bank()
-            await ctx.send(f"✅ Removed question from **{category.capitalize()} -> {sub_category.capitalize()}**!")
-            return
+    matched_entry, matched_sub = max(
+        search_entries,
+        key=lambda pair: difflib.SequenceMatcher(None, question.lower(), pair[0][0].lower()).ratio()
+    )
+    answers_display = ", ".join(matched_entry[1])
 
-    await ctx.send("Could not find a question matching that text.")
+    embed = discord.Embed(title="🔍 Closest Match Found", color=discord.Color.orange())
+    embed.add_field(name="Category", value=f"{category.capitalize()} → {matched_sub.capitalize()}", inline=False)
+    embed.add_field(name="Question", value=matched_entry[0], inline=False)
+    embed.add_field(name="Answers", value=answers_display, inline=False)
+
+    if await _confirm_removal(ctx, embed):
+        DataStorage.trivia_questions[category][matched_sub].remove(matched_entry)
+        DataStorage.save_trivia_bank()
+        await ctx.send(f"✅ Removed question from **{category.capitalize()} → {matched_sub.capitalize()}**!")
+    else:
+        await ctx.send("❌ Removal cancelled.")
 
 
 async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
@@ -288,8 +371,76 @@ async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
         await ctx.send("❌ These users don't have an adoption relationship.")
 
 
+async def admin_lottery_start(ctx, ticket_cap, duration_seconds, max_per_user):
+    """Start a new lottery with the given trigger conditions."""
+    guild_id = str(ctx.guild.id)
+
+    if DataStorage.get_lottery_active(guild_id):
+        await ctx.send("A lottery is already running! Use `.admin_lottery_cancel` to cancel it first.")
+        return
+
+    end_time = None
+    if duration_seconds is not None:
+        end_dt = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=duration_seconds)
+        end_time = end_dt.isoformat()
+
+    DataStorage.lottery_active[guild_id] = {
+        "ticket_cap": ticket_cap,
+        "end_time": end_time,
+        "max_per_user": max_per_user,
+        "channel_id": str(ctx.channel.id),
+    }
+    DataStorage.lottery_pot[guild_id] = 0.0
+    DataStorage.lottery_entries[guild_id] = {}
+    DataStorage.save_lottery()
+
+    cap_display = f"{ticket_cap:,} tickets" if ticket_cap else "No cap"
+    time_display = _format_duration(duration_seconds) if duration_seconds else "No time limit"
+
+    embed = discord.Embed(
+        title="🎟️ Lottery Started!",
+        description="A new lottery round has begun. Buy tickets with `.lottery_buy <amount>`!",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="🎫 Ticket Cap", value=cap_display, inline=True)
+    embed.add_field(name="⏱️ Time Limit", value=time_display, inline=True)
+    embed.add_field(name="👤 Max Per User", value=str(max_per_user), inline=True)
+    embed.add_field(name="💰 Ticket Cost", value=f"{EconomyModule.LOTTERY_TICKET_COST} beans", inline=True)
+    await ctx.send(embed=embed)
+
+
+async def admin_lottery_cancel(ctx):
+    """Cancel the active lottery and refund all ticket buyers."""
+    guild_id = str(ctx.guild.id)
+
+    if not DataStorage.get_lottery_active(guild_id):
+        await ctx.send("No lottery is currently running.")
+        return
+
+    entries = DataStorage.get_lottery_entries(guild_id)
+    refund_count = 0
+    for user_id, ticket_count in entries.items():
+        refund = ticket_count * EconomyModule.LOTTERY_TICKET_COST
+        user = DataStorage.get_or_create_user(int(user_id))
+        user.ajust_beans(refund)
+        refund_count += 1
+
+    DataStorage.lottery_active.pop(guild_id, None)
+    DataStorage.lottery_pot[guild_id] = 0.0
+    DataStorage.lottery_entries[guild_id] = {}
+    DataStorage.save_user_data()
+    DataStorage.save_lottery()
+
+    embed = discord.Embed(
+        title="❌ Lottery Cancelled",
+        description=f"The lottery has been cancelled. **{refund_count}** participant(s) have been refunded.",
+        color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
+
+
 async def force_lottery_draw(ctx):
-    """Draws a lottery winner and resets the pool."""
+    """Draws a lottery winner immediately and resets the pool."""
     guild_id = str(ctx.guild.id)
     entries = DataStorage.get_lottery_entries(guild_id)
 
@@ -297,26 +448,7 @@ async def force_lottery_draw(ctx):
         await ctx.send("No tickets have been sold this round!")
         return
 
-    population = list(entries.keys())
-    weights = [entries[uid] for uid in population]
-    winner_id = random.choices(population, weights=weights, k=1)[0]
-
-    winner_data = DataStorage.get_or_create_user(int(winner_id))
-    pot = DataStorage.get_lottery_pot(guild_id)
-    winner_data.ajust_beans(pot)
-
-    DataStorage.lottery_pot[guild_id] = 0.0
-    DataStorage.lottery_entries[guild_id] = {}
-    DataStorage.save_user_data()
-    DataStorage.save_lottery()
-
-    embed = discord.Embed(
-        title="🎉 Lottery Draw!",
-        description=f"<@{winner_id}> won the lottery and took home **{int(pot):,} beans**!",
-        color=discord.Color.gold()
-    )
-    embed.set_footer(text="The pot has been reset. Good luck next round! 🎟️")
-    await ctx.send(embed=embed)
+    await EconomyModule._execute_lottery_draw(guild_id, ctx.channel)
 
 
 async def admin_lottery_add(ctx, amount: int):

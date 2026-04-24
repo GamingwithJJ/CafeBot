@@ -1,5 +1,6 @@
 import discord
-from discord.ext import commands
+import datetime
+from discord.ext import commands, tasks
 from typing import Optional
 import DataStorage
 
@@ -126,11 +127,72 @@ async def slash_auth_check(interaction: discord.Interaction, required_type: str)
     return True
 
 
+def parse_duration(s):
+    """Parse a duration string like '1h', '30m', '2d' into seconds. Returns None for 'none' or '0'."""
+    s = s.strip().lower()
+    if s in ("none", "0"):
+        return None
+    if s.endswith("d") and s[:-1].isdigit():
+        return int(s[:-1]) * 86400
+    if s.endswith("h") and s[:-1].isdigit():
+        return int(s[:-1]) * 3600
+    if s.endswith("m") and s[:-1].isdigit():
+        return int(s[:-1]) * 60
+    return None
+
+
+@tasks.loop(seconds=30)
+async def lottery_timer_check():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for guild_id in list(DataStorage.lottery_active.keys()):
+        active = DataStorage.lottery_active.get(guild_id)
+        if not active:
+            continue
+        end_time = active.get("end_time")
+        if not end_time:
+            continue
+        end_dt = datetime.datetime.fromisoformat(end_time)
+        if now >= end_dt:
+            entries = DataStorage.get_lottery_entries(guild_id)
+            channel = bot.get_channel(int(active["channel_id"]))
+            if entries and channel:
+                await channel.send("⏰ Time's up! Drawing the lottery winner now...")
+                await EconomyModule._execute_lottery_draw(guild_id, channel)
+            else:
+                DataStorage.lottery_active.pop(guild_id, None)
+                DataStorage.lottery_pot.pop(guild_id, None)
+                DataStorage.lottery_entries.pop(guild_id, None)
+                DataStorage.save_lottery()
+
+
 # Events:
 @bot.event
 async def on_ready():
     DataStorage.load_user_data()
     DataStorage.load_all()
+    EconomyModule.bot = bot
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for guild_id in list(DataStorage.lottery_active.keys()):
+        active = DataStorage.lottery_active.get(guild_id)
+        if not active:
+            continue
+        end_time = active.get("end_time")
+        if end_time:
+            end_dt = datetime.datetime.fromisoformat(end_time)
+            if now >= end_dt:
+                entries = DataStorage.get_lottery_entries(guild_id)
+                channel = bot.get_channel(int(active["channel_id"]))
+                if entries and channel:
+                    await channel.send("⏰ Lottery expired while the bot was offline! Drawing now...")
+                    await EconomyModule._execute_lottery_draw(guild_id, channel)
+                else:
+                    DataStorage.lottery_active.pop(guild_id, None)
+                    DataStorage.lottery_pot.pop(guild_id, None)
+                    DataStorage.lottery_entries.pop(guild_id, None)
+                    DataStorage.save_lottery()
+
+    lottery_timer_check.start()
     synced = await bot.tree.sync()
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print(f'Synced {len(synced)} slash commands.')
@@ -1111,6 +1173,36 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
     Grants beans to a user without requiring the admin to have funds.
     """
     await BotAdminModule.admin_tip(ctx, target, amount)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def admin_lottery_start(ctx, ticket_cap: str = "0", duration: str = "none", max_per_user: int = 10):
+    """
+    Usage: .admin_lottery_start [ticket_cap] [duration] [max_per_user]
+    Examples:
+      .admin_lottery_start 100 none 5   → cap at 100 tickets, 5 per user
+      .admin_lottery_start 0 2h 10      → runs for 2 hours, 10 per user
+      .admin_lottery_start 50 1h 3      → cap OR time, whichever first
+    Durations: 30m, 1h, 2d, etc.  Use 0 or none to omit.
+    """
+    try:
+        cap = None if ticket_cap in ("0", "none") else int(ticket_cap)
+    except ValueError:
+        await ctx.send("Invalid ticket cap. Use a number or 0 for no cap.")
+        return
+    secs = parse_duration(duration)
+    if cap is None and secs is None:
+        await ctx.send("Specify at least a ticket cap (non-zero) or a duration (e.g. `1h`). Both can be set.")
+        return
+    await BotAdminModule.admin_lottery_start(ctx, cap, secs, max_per_user)
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def admin_lottery_cancel(ctx):
+    """Cancel the active lottery and refund all ticket buyers."""
+    await BotAdminModule.admin_lottery_cancel(ctx)
 
 
 @bot.command()

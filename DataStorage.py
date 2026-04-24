@@ -45,6 +45,7 @@ gif_messages = {}
 
 lottery_pot = {}     # guild_id_str → float
 lottery_entries = {}  # guild_id_str → {discord_id_str: ticket count}
+lottery_active = {}  # guild_id_str → {ticket_cap, end_time, max_per_user, channel_id}
 LOTTERY_FILE = "Saves/lottery.json"
 
 """
@@ -147,10 +148,10 @@ def save_trivia_bank():
 
 def save_lottery():
     """Saves lottery state to JSON file."""
-    global lottery_pot, lottery_entries
+    global lottery_pot, lottery_entries, lottery_active
     try:
         with open(LOTTERY_FILE, "w", encoding="utf-8") as f:
-            json.dump({"pot": lottery_pot, "entries": lottery_entries}, f, indent=4)
+            json.dump({"pot": lottery_pot, "entries": lottery_entries, "active": lottery_active}, f, indent=4)
         print("✅ Lottery state saved!")
     except Exception as e:
         print(f"❌ Error saving lottery state: {e}")
@@ -158,7 +159,7 @@ def save_lottery():
 
 def load_lottery():
     """Loads lottery state from JSON file."""
-    global lottery_pot, lottery_entries
+    global lottery_pot, lottery_entries, lottery_active
     if os.path.exists(LOTTERY_FILE):
         try:
             with open(LOTTERY_FILE, "r", encoding="utf-8") as f:
@@ -173,14 +174,22 @@ def load_lottery():
             else:
                 lottery_pot = pot
                 lottery_entries = entries
+            lottery_active = data.get("active", {})
             print(f"✅ Lottery loaded — {len(lottery_pot)} server(s)")
         except Exception as e:
             print(f"❌ Error loading lottery state: {e}")
             lottery_pot = {}
             lottery_entries = {}
+            lottery_active = {}
     else:
         lottery_pot = {}
         lottery_entries = {}
+        lottery_active = {}
+
+
+def get_lottery_active(guild_id):
+    """Returns the active lottery config for a guild, or None if none is running."""
+    return lottery_active.get(str(guild_id))
 
 
 def save_all():
