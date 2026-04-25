@@ -17,7 +17,7 @@ GIFS_FILE = "Saves/gifs.json"
 MESSAGES_FILE = "Saves/gif_messages.json"
 MAGIC_EIGHT_BALL_FILE = "Saves/MagicEightBall.json"
 VERSES_FILE = "Saves/verses.json"
-TRIVIA_QUESTIONS_FILE = "Saves/trivia_questions.json"
+TRIVIA_QUESTIONS_DIR = "Saves/trivia"
 BIBLE_INDEX_FILE = "Saves/bible_index.json"
 
 # Format: { "category_name": { "sub_category_name": [ ("Question", ["answer1", "answer2"]) ] } }
@@ -137,10 +137,13 @@ def save_bible_index():
 
 
 def save_trivia_bank():
-    """Saves the trivia dictionary to the JSON file."""
+    """Saves each trivia category to its own file in TRIVIA_QUESTIONS_DIR."""
     try:
-        with open(TRIVIA_QUESTIONS_FILE, "w", encoding="utf-8") as f:
-            json.dump(trivia_questions, f, indent=4)
+        os.makedirs(TRIVIA_QUESTIONS_DIR, exist_ok=True)
+        for category, subcategories in trivia_questions.items():
+            path = os.path.join(TRIVIA_QUESTIONS_DIR, f"{category}.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(subcategories, f, indent=4, ensure_ascii=False)
         print("✅ Trivia Bank saved!")
     except Exception as e:
         print(f"❌ Error saving trivia bank: {e}")
@@ -286,11 +289,13 @@ def load_all():
     else:
         magic_eight_ball = []
 
-    if os.path.exists(TRIVIA_QUESTIONS_FILE):
-        with open(TRIVIA_QUESTIONS_FILE, "r", encoding="utf-8") as f:
-            trivia_questions = json.load(f)
-    else:
-        trivia_questions = {}
+    trivia_questions = {}
+    if os.path.isdir(TRIVIA_QUESTIONS_DIR):
+        for fname in os.listdir(TRIVIA_QUESTIONS_DIR):
+            if fname.endswith(".json"):
+                category = fname[:-5]
+                with open(os.path.join(TRIVIA_QUESTIONS_DIR, fname), "r", encoding="utf-8") as f:
+                    trivia_questions[category] = json.load(f)
 
     load_bible_index()
 

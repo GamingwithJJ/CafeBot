@@ -13,7 +13,7 @@ def _fuzzy_find(query: str, candidates: list) -> str | None:
     if not candidates:
         return None
     query_lower = query.lower()
-    best = max(candidates, key=lambda c: difflib.SequenceMatcher(None, query_lower, c.lower()).ratio())
+    best = max(candidates, key=lambda c: difflib.SequenceMatcher(None, query_lower, c.lower(), autojunk=False).ratio())
     return best
 
 
@@ -176,9 +176,10 @@ async def remove_quote(ctx, quote_to_remove: str):
         await ctx.send("❌ No quotes found.")
         return
 
+    q_lower = quote_to_remove.lower()
     matched_text, matched_author, matched_obj = max(
         all_entries,
-        key=lambda e: difflib.SequenceMatcher(None, quote_to_remove.lower(), e[0].lower()).ratio()
+        key=lambda e: difflib.SequenceMatcher(None, q_lower, e[0].lower(), autojunk=False).ratio()
     )
 
     embed = discord.Embed(title="🔍 Closest Match Found", color=discord.Color.orange())
@@ -271,9 +272,10 @@ async def remove_trivia(ctx, category: str, sub_category: str, question: str):
         await ctx.send("❌ No trivia questions found in that category.")
         return
 
+    q_lower = question.lower()
     matched_entry, matched_sub = max(
         search_entries,
-        key=lambda pair: difflib.SequenceMatcher(None, question.lower(), pair[0][0].lower()).ratio()
+        key=lambda pair: difflib.SequenceMatcher(None, q_lower, pair[0][0].lower(), autojunk=False).ratio()
     )
     answers_display = ", ".join(matched_entry[1])
 

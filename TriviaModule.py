@@ -128,7 +128,7 @@ async def start_session(ctx, rounds: int, user_data):
         if category in DataStorage.trivia_questions:
             for sub_category, questions in DataStorage.trivia_questions[category].items():
                 for q in questions:
-                    available_questions.append((sub_category, q[0], q[1]))
+                    available_questions.append((category, sub_category, q[0], q[1]))
 
     if len(available_questions) < rounds:
         await ctx.send(
@@ -144,13 +144,13 @@ async def start_session(ctx, rounds: int, user_data):
         f"🎉 **Trivia Session Starting!**\n**Enabled Topics:** {enabled_cats_string}\n**Rounds:** {rounds}\nThe first person to type the correct answer wins the round. Get ready...")
     await asyncio.sleep(3)
 
+    selected_questions = random.sample(available_questions, rounds)
+
     try:
         # 2. The Game Loop
-        for round_num in range(1, rounds + 1):
+        for round_num, chosen_item in enumerate(selected_questions, start=1):
 
-            chosen_item = random.choice(available_questions)
-            sub_category, question_text, acceptable_answers = chosen_item
-            available_questions.remove(chosen_item)
+            chosen_category, sub_category, question_text, acceptable_answers = chosen_item
 
             timeout = get_question_timeout(question_text, acceptable_answers)
 
@@ -159,7 +159,7 @@ async def start_session(ctx, rounds: int, user_data):
                 description=f"**{question_text}**",
                 color=discord.Color.blue()
             )
-            embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have {timeout} seconds to answer!")
+            embed.set_footer(text=f"📂 {chosen_category.capitalize()} → {sub_category.capitalize()} • You have {timeout}s to answer!")
             await ctx.send(embed=embed)
 
             def check(m):
@@ -249,7 +249,7 @@ async def quick_trivia(ctx, user_data, category: str = None):
         if cat_lower in DataStorage.trivia_questions:
             for sub_category, questions in DataStorage.trivia_questions[cat_lower].items():
                 for q in questions:
-                    available_questions.append((sub_category, q[0], q[1]))
+                    available_questions.append((cat_lower, sub_category, q[0], q[1]))
         else:
             cats = ", ".join(DataStorage.trivia_questions.keys())
             await ctx.send(f"❌ Category **{category}** not found. Available: `{cats}`")
@@ -259,22 +259,22 @@ async def quick_trivia(ctx, user_data, category: str = None):
             if category in DataStorage.trivia_questions:
                 for sub_category, questions in DataStorage.trivia_questions[category].items():
                     for q in questions:
-                        available_questions.append((sub_category, q[0], q[1]))
+                        available_questions.append((category, sub_category, q[0], q[1]))
 
     if not available_questions:
         await ctx.send("⚠️ No questions available. Enable some categories with `.trivia_config` or specify a category.")
         return
 
-    sub_category, question_text, acceptable_answers = random.choice(available_questions)
+    chosen_category, sub_category, question_text, acceptable_answers = random.choice(available_questions)
 
     timeout = get_question_timeout(question_text, acceptable_answers)
 
     embed = discord.Embed(
-        title=f"🧠 Quick Trivia! (Category: {category})",
+        title="🧠 Quick Trivia!",
         description=f"**{question_text}**",
         color=discord.Color.blue()
     )
-    embed.set_footer(text=f"Category: {sub_category.capitalize()} • You have {timeout} seconds to answer! First correct answer wins 10 beans.")
+    embed.set_footer(text=f"📂 {chosen_category.capitalize()} → {sub_category.capitalize()} • {timeout}s to answer! First correct answer wins 10 beans.")
     await ctx.send(embed=embed)
 
     def check(m):
