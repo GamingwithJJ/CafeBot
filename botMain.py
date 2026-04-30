@@ -840,6 +840,11 @@ async def thanks(ctx, target: discord.Member = None):
     await FunModule.gif(ctx, "thanks", target)
 
 
+@bot.command()
+@is_authorized("any")
+async def absolutecinema(ctx):
+    await FunModule.gif(ctx, "absolutecinema")
+
 
 @bot.command()
 @is_authorized("any")

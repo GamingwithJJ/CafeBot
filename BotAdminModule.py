@@ -273,23 +273,64 @@ async def remove_trivia(ctx, category: str, sub_category: str, question: str):
         return
 
     q_lower = question.lower()
-    matched_entry, matched_sub = max(
+    ranked = sorted(
         search_entries,
-        key=lambda pair: difflib.SequenceMatcher(None, q_lower, pair[0][0].lower(), autojunk=False).ratio()
+        key=lambda pair: difflib.SequenceMatcher(None, q_lower, pair[0][0].lower(), autojunk=False).ratio(),
+        reverse=True
     )
-    answers_display = ", ".join(matched_entry[1])
 
-    embed = discord.Embed(title="🔍 Closest Match Found", color=discord.Color.orange())
-    embed.add_field(name="Category", value=f"{category.capitalize()} → {matched_sub.capitalize()}", inline=False)
-    embed.add_field(name="Question", value=matched_entry[0], inline=False)
-    embed.add_field(name="Answers", value=answers_display, inline=False)
+    def make_embed(i):
+        entry, sub = ranked[i]
+        embed = discord.Embed(title=f"🔍 Match {i + 1} of {len(ranked)}", color=discord.Color.orange())
+        embed.add_field(name="Category", value=f"{category.capitalize()} → {sub.capitalize()}", inline=False)
+        embed.add_field(name="Question", value=entry[0], inline=False)
+        embed.add_field(name="Answers", value=", ".join(entry[1]), inline=False)
+        embed.set_footer(text="⬅️ prev  ➡️ next  ✅ remove  ❌ cancel (60s)")
+        return embed
 
-    if await _confirm_removal(ctx, embed):
-        DataStorage.trivia_questions[category][matched_sub].remove(matched_entry)
-        DataStorage.save_trivia_bank()
-        await ctx.send(f"✅ Removed question from **{category.capitalize()} → {matched_sub.capitalize()}**!")
-    else:
-        await ctx.send("❌ Removal cancelled.")
+    index = 0
+    msg = await ctx.send(embed=make_embed(0))
+    for emoji in ("⬅️", "➡️", "✅", "❌"):
+        await msg.add_reaction(emoji)
+
+    def check(reaction, user):
+        return (
+            user == ctx.author
+            and reaction.message.id == msg.id
+            and str(reaction.emoji) in ("⬅️", "➡️", "✅", "❌")
+        )
+
+    while True:
+        try:
+            reaction, _ = await ctx.bot.wait_for("reaction_add", timeout=60.0, check=check)
+            emoji = str(reaction.emoji)
+
+            if emoji == "➡️":
+                index = (index + 1) % len(ranked)
+                await msg.edit(embed=make_embed(index))
+                try:
+                    await msg.remove_reaction(emoji, ctx.author)
+                except discord.Forbidden:
+                    pass
+            elif emoji == "⬅️":
+                index = (index - 1) % len(ranked)
+                await msg.edit(embed=make_embed(index))
+                try:
+                    await msg.remove_reaction(emoji, ctx.author)
+                except discord.Forbidden:
+                    pass
+            elif emoji == "✅":
+                matched_entry, matched_sub = ranked[index]
+                DataStorage.trivia_questions[category][matched_sub].remove(matched_entry)
+                DataStorage.save_trivia_bank()
+                await ctx.send(f"✅ Removed question from **{category.capitalize()} → {matched_sub.capitalize()}**!")
+                return
+            elif emoji == "❌":
+                await ctx.send("❌ Removal cancelled.")
+                return
+        except asyncio.TimeoutError:
+            await ctx.send("Cancelled (timed out).")
+            return
 
 
 async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
