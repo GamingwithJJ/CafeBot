@@ -6,19 +6,24 @@ import difflib
 import DataStorage
 
 
+_STRIP_WORDS = {"the", "a", "an", "of", "and", "in", "on", "at", "to", "for"}
+
 def _normalize(s: str) -> str:
     s = s.lower()
     s = re.sub(r"[^\w\s]", "", s)
-    s = " ".join(s.split())
-    return s
+    words = [w for w in s.split() if w not in _STRIP_WORDS]
+    return " ".join(words)
 
 
 def is_correct_answer(msg_content: str, acceptable_answers: list) -> bool:
     normalized_msg = _normalize(msg_content)
     msg_words = normalized_msg.split()
+    msg_word_set = set(msg_words)
 
     for answer in acceptable_answers:
         norm_answer = _normalize(answer)
+        if not norm_answer:
+            continue
         answer_words = norm_answer.split()
         window_size = len(answer_words)
 
@@ -31,13 +36,25 @@ def is_correct_answer(msg_content: str, acceptable_answers: list) -> bool:
             if norm_answer in normalized_msg:
                 return True
 
+        # Order-independent match for safe-length multi-word answers
+        if 2 <= window_size <= 5 and all(len(w) >= 4 for w in answer_words):
+            if set(answer_words).issubset(msg_word_set):
+                return True
+
         # Fuzzy match — skip for purely numeric answers (years, counts, etc.)
         is_numeric = norm_answer.replace(" ", "").isdigit()
-        if len(norm_answer) >= 4 and not is_numeric:
+        answer_len = len(norm_answer)
+        if answer_len >= 4 and not is_numeric:
+            if answer_len <= 6:
+                threshold = 0.90
+            elif answer_len <= 12:
+                threshold = 0.85
+            else:
+                threshold = 0.82
             for i in range(max(1, len(msg_words) - window_size + 1)):
                 window = " ".join(msg_words[i : i + window_size])
                 ratio = difflib.SequenceMatcher(None, norm_answer, window).ratio()
-                if ratio >= 0.82:
+                if ratio >= threshold:
                     return True
 
     return False

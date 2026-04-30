@@ -361,7 +361,7 @@ COMMAND_MODULES = {
             ("`.add_eight_ball <response>`", "Add a new response to the Magic 8-Ball's answer pool", "bot_admin"),
             ("`.remove_eight_ball <response>`", "Remove a response from the Magic 8-Ball's answer pool by its exact text", "bot_admin"),
             ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin"),
-            ("`.remove_trivia <category> <sub_category> <question>`", "Remove a question from the trivia bank by its exact text. Wrap fields containing spaces in quotes.", "bot_admin"),
+            ("`.remove_trivia <category> [sub_category] <question>`", "Remove a question from the trivia bank by fuzzy search. Sub-category is optional; omit it to search the whole category. Wrap fields containing spaces in quotes.", "bot_admin"),
             ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin"),
             ("`.admin_lottery_add <amount>`", "Add beans directly to the lottery pot to seed prize pool.", "bot_admin"),
             ("`.admin_lottery_give <user> <amount>`", "Grant lottery tickets to a user without requiring bean payment.", "bot_admin"),
@@ -1162,11 +1162,20 @@ async def add_trivia(ctx, category: str, sub_category: str, question: str, *, an
 
 @bot.command()
 @is_authorized("bot_admin")
-async def remove_trivia(ctx, category: str, sub_category: str, *, question: str):
+async def remove_trivia(ctx, category: str, *args):
     """
-    Usage: .remove_trivia "category" "sub-category" "Question?"
-    Use quotes around each section if they contain spaces!
+    Usage: .remove_trivia <category> [sub_category] <question>
+    Sub-category is optional. Wrap fields containing spaces in quotes.
     """
+    if not args:
+        await ctx.send("Usage: `.remove_trivia <category> [sub_category] <question>`")
+        return
+    if len(args) == 1:
+        sub_category = None
+        question = args[0]
+    else:
+        sub_category = args[0]
+        question = " ".join(args[1:])
     await BotAdminModule.remove_trivia(ctx, category, sub_category, question)
 
 

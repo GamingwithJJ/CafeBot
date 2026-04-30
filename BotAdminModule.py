@@ -249,19 +249,20 @@ async def add_trivia(ctx, category: str, sub_category: str, question: str, answe
     await ctx.send(f"✅ Added new question to **{category.capitalize()} -> {sub_category.capitalize()}**!")
 
 
-async def remove_trivia(ctx, category: str, sub_category: str, question: str):
+async def remove_trivia(ctx, category: str, sub_category: str | None, question: str):
     category = category.lower()
-    sub_category = sub_category.lower()
 
     if category not in DataStorage.trivia_questions:
         await ctx.send(f"❌ Category **{category.capitalize()}** not found.")
         return
 
-    # Determine search scope: specified sub-category first, then all of main category
-    if sub_category in DataStorage.trivia_questions[category]:
+    if sub_category is not None:
+        sub_category = sub_category.lower()
+        if sub_category not in DataStorage.trivia_questions[category]:
+            await ctx.send(f"❌ Sub-category **{sub_category.capitalize()}** not found in **{category.capitalize()}**.")
+            return
         search_entries = [(e, sub_category) for e in DataStorage.trivia_questions[category][sub_category]]
     else:
-        await ctx.send(f"⚠️ Sub-category **{sub_category.capitalize()}** not found in **{category.capitalize()}**. Searching all of **{category.capitalize()}**...")
         search_entries = [
             (e, sc)
             for sc, entries in DataStorage.trivia_questions[category].items()
