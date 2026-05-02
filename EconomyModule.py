@@ -33,8 +33,8 @@ SLOTS_BASE_JACKPOT_MULTIPLIER = 231
 async def beans(ctx):
     """Shows the current amount of beans the user has"""
     user = ctx.author
-    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(user.id)
+    guild_id = user_data.effective_guild_id(ctx)
 
     embed = discord.Embed(
         title="☕ Coffee Bean Balance",
@@ -49,7 +49,7 @@ async def beans(ctx):
 async def shift(ctx):
     """Works a shift providing the user with currency"""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
     state = user.state(guild_id)
     current_time = datetime.datetime.now()
 
@@ -207,7 +207,7 @@ async def cafe_status(ctx):
 async def daily(ctx):
     """Claim a daily reward of Coffee Beans."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
     state = user.state(guild_id)
     now = datetime.datetime.now()
 
@@ -259,10 +259,14 @@ def _resolve_slots_outcome(guild_id, bet, reels):
     """
     if reels[0] == reels[1] == reels[2]:
         if reels[0] == "7️⃣":
-            pool = DataStorage.get_jackpot(guild_id)
-            payout = max(int(pool), SLOTS_BASE_JACKPOT_MULTIPLIER * bet)
-            DataStorage.reset_jackpot(guild_id)
-            DataStorage.save_jackpot()
+            pool = int(DataStorage.get_jackpot(guild_id))
+            floor = SLOTS_BASE_JACKPOT_MULTIPLIER * bet
+            if pool > floor:
+                payout = pool
+                DataStorage.reset_jackpot(guild_id)
+                DataStorage.save_jackpot()
+            else:
+                payout = floor
             return payout - bet, f"🎰 JACKPOT! Triple 7s — won {payout:,} beans!"
         return int(bet * 26) - bet, "🎉 Three of a kind!"
     if reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
@@ -275,7 +279,7 @@ def _resolve_slots_outcome(guild_id, bet, reels):
 async def slots(ctx, bet: int):
     """Spin the slot machine and bet Coffee Beans."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
 
     if bet < 50:
         await ctx.send("Minimum bet is 50 beans.")
@@ -392,7 +396,7 @@ class BlackjackView(discord.ui.View):
     def __init__(self, ctx, user, bet, deck, player_hand, dealer_hand):
         super().__init__(timeout=60)
         self.ctx = ctx
-        self.guild_id = str(ctx.guild.id)
+        self.guild_id = user.effective_guild_id(ctx)
         self.user = user
         self.bet = bet
         self.deck = deck
@@ -456,7 +460,7 @@ class BlackjackPlayAgainView(discord.ui.View):
     def __init__(self, ctx, bet):
         super().__init__(timeout=60)
         self.ctx = ctx
-        self.guild_id = str(ctx.guild.id)
+        self.guild_id = DataStorage.get_or_create_user(ctx.author.id).effective_guild_id(ctx)
         self.bet = bet
         self.message = None
 
@@ -499,7 +503,7 @@ class BlackjackPlayAgainView(discord.ui.View):
 async def blackjack(ctx, bet: int):
     """Play blackjack against the dealer."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
 
     if bet < 20:
         await ctx.send("Minimum bet is 20 beans.")
@@ -627,8 +631,8 @@ async def lottery(ctx):
 
 async def lottery_buy(ctx, amount: int):
     """Buy lottery tickets."""
-    guild_id = str(ctx.guild.id)
     user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = user.effective_guild_id(ctx)
     user_id = str(ctx.author.id)
 
     active = DataStorage.get_lottery_active(guild_id)
@@ -692,7 +696,7 @@ async def lottery_buy(ctx, amount: int):
 async def bank(ctx):
     """Show your bank balance, cap, and upgrade info."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
     state = user.state(guild_id)
     cap = BANK_UPGRADE_TIERS[state.bank_level]
     max_level = len(BANK_UPGRADE_TIERS) - 1
@@ -722,7 +726,7 @@ async def bank(ctx):
 async def deposit(ctx, amount: int):
     """Move beans from wallet to bank."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
     state = user.state(guild_id)
     cap = BANK_UPGRADE_TIERS[state.bank_level]
     space = cap - state.bank_balance
@@ -756,7 +760,7 @@ async def deposit(ctx, amount: int):
 async def withdraw(ctx, amount: int):
     """Move beans from bank to wallet."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
     state = user.state(guild_id)
 
     if amount <= 0:
@@ -784,7 +788,7 @@ async def withdraw(ctx, amount: int):
 async def bank_upgrade(ctx):
     """Purchase the next bank tier."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = str(ctx.guild.id)
+    guild_id = user.effective_guild_id(ctx)
     state = user.state(guild_id)
     max_level = len(BANK_UPGRADE_TIERS) - 1
 

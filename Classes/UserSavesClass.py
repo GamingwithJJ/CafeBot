@@ -140,6 +140,7 @@ class User:
         self.enabled_trivia_categories = []
         self.bookmarked_verses = []
         self.warnings = {}  # {guild_id_str: [{"reason", "issued_by", "timestamp"}]}
+        self.default_dm_guild_id = None  # Optional[str] — set by .dm_server picker
 
         # PER-GUILD data
         self.guild_data = {}  # {guild_id_str: GuildState}
@@ -152,6 +153,12 @@ class User:
         if gid not in self.guild_data:
             self.guild_data[gid] = GuildState()
         return self.guild_data[gid]
+
+    def effective_guild_id(self, ctx):
+        """The guild id this command should act against — current guild if any, else the user's DM default."""
+        if getattr(ctx, "guild", None) is not None:
+            return str(ctx.guild.id)
+        return self.default_dm_guild_id
 
     # -------- economy --------
 
@@ -300,6 +307,7 @@ class User:
             "enabled_trivia_categories": self.enabled_trivia_categories,
             "bookmarked_verses": self.bookmarked_verses,
             "warnings": self.warnings,
+            "default_dm_guild_id": self.default_dm_guild_id,
             "guild_data": {
                 gid: gs.to_dict() for gid, gs in self.guild_data.items()
             },
@@ -319,6 +327,8 @@ class User:
         user.enabled_trivia_categories = list(data.get("enabled_trivia_categories", []))
         user.bookmarked_verses = list(data.get("bookmarked_verses", []))
         user.warnings = dict(data.get("warnings", {}))
+        ddg = data.get("default_dm_guild_id")
+        user.default_dm_guild_id = str(ddg) if ddg else None
 
         # Per-guild data
         for gid, gs_data in data.get("guild_data", {}).items():

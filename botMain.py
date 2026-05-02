@@ -51,6 +51,7 @@ class InteractionContext:
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 bot = commands.Bot(command_prefix='.', intents=intents)
 
@@ -61,16 +62,37 @@ DataStorage.administrators = config.get("administrators").split(",")
 
 
 _DM_REJECT_MESSAGE = "⚠️ This command must be used in a server, not a DM."
+_DM_FALLBACK_UNSET_MESSAGE = "⚠️ Set a default server first with `.dm_server` to use this command in DMs."
+_DM_FALLBACK_STALE_MESSAGE = "⚠️ Your DM default server is no longer valid. Run `.dm_server` to pick a new one."
 
 
-def is_authorized(required_type: str = "any", guild_only: bool = False):
+def _resolve_dm_fallback(user_id: int):
+    """For a DM invocation with dm_fallback=True, return (ok, error_message).
+    ok=True means the gate should let the command through; the resolved guild id is on the User."""
+    user_data = DataStorage.get_or_create_user(user_id)
+    target = user_data.default_dm_guild_id
+    if not target:
+        return False, _DM_FALLBACK_UNSET_MESSAGE
+    guild = bot.get_guild(int(target))
+    if guild is None or guild.get_member(user_id) is None:
+        return False, _DM_FALLBACK_STALE_MESSAGE
+    return True, None
+
+
+def is_authorized(required_type: str = "any", guild_only: bool = False, dm_fallback: bool = False):
     async def predicate(ctx):
         # Guild gate — applies to all non-"any" auth types implicitly, plus any "any" command
         # that opts in. Even bot-admin DMs are blocked because per-guild commands need guild context.
         needs_guild = guild_only or required_type != "any"
         if needs_guild and ctx.guild is None:
-            await ctx.send(_DM_REJECT_MESSAGE)
-            return False
+            if dm_fallback:
+                ok, err = _resolve_dm_fallback(ctx.author.id)
+                if not ok:
+                    await ctx.send(err)
+                    return False
+            else:
+                await ctx.send(_DM_REJECT_MESSAGE)
+                return False
 
         if str(ctx.author.id) in DataStorage.administrators:
             return True
@@ -129,11 +151,17 @@ async def is_authorized_interaction(interaction: discord.Interaction, required_t
     return False
 
 
-async def slash_auth_check(interaction: discord.Interaction, required_type: str, guild_only: bool = False) -> bool:
+async def slash_auth_check(interaction: discord.Interaction, required_type: str, guild_only: bool = False, dm_fallback: bool = False) -> bool:
     needs_guild = guild_only or required_type != "any"
     if needs_guild and interaction.guild is None:
-        await interaction.response.send_message(_DM_REJECT_MESSAGE, ephemeral=True)
-        return False
+        if dm_fallback:
+            ok, err = _resolve_dm_fallback(interaction.user.id)
+            if not ok:
+                await interaction.response.send_message(err, ephemeral=True)
+                return False
+        else:
+            await interaction.response.send_message(_DM_REJECT_MESSAGE, ephemeral=True)
+            return False
     if not await is_authorized_interaction(interaction, required_type):
         await interaction.response.send_message("🚫 You don't have permission to use this command.", ephemeral=True)
         return False
@@ -251,7 +279,8 @@ COMMAND_MODULES = {
         "emoji": "🔧",
         "commands": [
             ("`.ping`", "Check if the bot is awake", "any"),
-            ("`.help [module]`", "Show all modules, or use `.help <module>` to list the commands inside it", "any")
+            ("`.help [module]`", "Show all modules, or use `.help <module>` to list the commands inside it", "any"),
+            ("`.dm_server [clear]`", "Pick which server your DM-invoked economy/trivia commands route to (`.shift`, `.beans`, `.daily`, `.quick_trivia`, etc.). Run with no args to open the picker, or `.dm_server clear` to unset", "any")
         ]
     },
     "Moderation": {
@@ -604,7 +633,7 @@ async def unadopt(ctx, target_user: discord.Member):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def family(ctx):
     await FunModule.family(ctx)
 
@@ -881,13 +910,13 @@ async def remove_eight_ball(ctx, *, response: str):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def shift(ctx):
     await EconomyModule.shift(ctx)
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def beans(ctx):
     await EconomyModule.beans(ctx)
 
@@ -899,7 +928,7 @@ async def tip(ctx, target: discord.Member, amount: float):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def partner(ctx):
     await FunModule.partner(ctx)
 
@@ -956,7 +985,7 @@ async def quote_stats(ctx):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def profile(ctx):
     await FunModule.profile(ctx)
 
@@ -977,19 +1006,19 @@ async def coinflip(ctx):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def daily(ctx):
     await EconomyModule.daily(ctx)
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def slots(ctx, bet: int):
     await EconomyModule.slots(ctx, bet)
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def blackjack(ctx, bet: int):
     await EconomyModule.blackjack(ctx, bet)
 
@@ -1001,19 +1030,19 @@ async def lottery(ctx):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def lottery_buy(ctx, amount: int):
     await EconomyModule.lottery_buy(ctx, amount)
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def bank(ctx):
     await EconomyModule.bank(ctx)
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def deposit(ctx, amount: str):
     if amount.lower() == "all":
         amount = int(DataStorage.get_or_create_user(ctx.author.id).get_beans(str(ctx.guild.id)))
@@ -1027,13 +1056,13 @@ async def deposit(ctx, amount: str):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def withdraw(ctx, amount: int):
     await EconomyModule.withdraw(ctx, amount)
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def bank_upgrade(ctx):
     await EconomyModule.bank_upgrade(ctx)
 
@@ -1153,14 +1182,14 @@ async def trivia(ctx, rounds: int):
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def quick_trivia(ctx, category: str = None):
     user_data = DataStorage.get_or_create_user(ctx.author.id)
     await TriviaModule.quick_trivia(ctx, user_data, category)
 
 
 @bot.command()
-@is_authorized("any", guild_only=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def trivia_stats(ctx):
     user_data = DataStorage.get_or_create_user(ctx.author.id)
     await TriviaModule.trivia_stats(ctx, user_data)
@@ -1295,6 +1324,68 @@ async def trivia_config(ctx):
     """Opens the trivia configuration menu."""
     user_data = DataStorage.get_or_create_user(ctx.author.id)
     await TriviaModule.open_config(ctx, user_data)
+
+
+# --- DM DEFAULT SERVER ---
+
+class DmServerView(discord.ui.View):
+    def __init__(self, user_data, shared_guilds):
+        super().__init__(timeout=120)
+        self.user_data = user_data
+        options = []
+        for g in shared_guilds:
+            is_current = str(g.id) == (user_data.default_dm_guild_id or "")
+            options.append(discord.SelectOption(label=g.name[:100], value=str(g.id), default=is_current))
+        self.select_menu = discord.ui.Select(
+            placeholder="Pick the server to route your DM commands to...",
+            min_values=1, max_values=1, options=options,
+        )
+        self.select_menu.callback = self.select_callback
+        self.add_item(self.select_menu)
+
+    async def select_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != int(self.user_data.discord_id):
+            await interaction.response.send_message("❌ This is not your menu!", ephemeral=True)
+            return
+        chosen = self.select_menu.values[0]
+        self.user_data.default_dm_guild_id = chosen
+        DataStorage.save_user_data()
+        guild = bot.get_guild(int(chosen))
+        name = guild.name if guild else chosen
+        await interaction.response.send_message(f"✅ DM commands will now route to **{name}**.", ephemeral=True)
+
+
+def _shared_guilds_for(user_id: int):
+    return [g for g in bot.guilds if g.get_member(user_id) is not None]
+
+
+async def _open_dm_server_picker(ctx, user_data):
+    shared = _shared_guilds_for(int(user_data.discord_id))
+    if not shared:
+        await ctx.send("⚠️ You don't share any servers with me, so there's nothing to set as your DM default.")
+        return
+    current = user_data.default_dm_guild_id
+    if current:
+        cur_guild = bot.get_guild(int(current))
+        cur_label = cur_guild.name if cur_guild else f"unknown ({current})"
+        desc = f"**Current default:** {cur_label}\n\nPick a server below to change where DM commands like `.shift` and `.quick_trivia` send beans."
+    else:
+        desc = "Pick a server below to set where DM commands like `.shift` and `.quick_trivia` send beans."
+    embed = discord.Embed(title="📬 DM Default Server", description=desc, color=discord.Color.blurple())
+    await ctx.send(embed=embed, view=DmServerView(user_data, shared))
+
+
+@bot.command(name="dm_server")
+@is_authorized("any")
+async def dm_server(ctx, action: Optional[str] = None):
+    """Pick which server your DM-invoked commands route to. Use `.dm_server clear` to unset."""
+    user_data = DataStorage.get_or_create_user(ctx.author.id)
+    if action and action.lower() == "clear":
+        user_data.default_dm_guild_id = None
+        DataStorage.save_user_data()
+        await ctx.send("✅ DM default server cleared.")
+        return
+    await _open_dm_server_picker(ctx, user_data)
 
 
 # --- MUSIC COMMANDS ---
@@ -1554,7 +1645,7 @@ async def slash_divorce(interaction: discord.Interaction, target_user: discord.M
 
 @bot.tree.command(name="partner", description="View your marriage certificate")
 async def slash_partner(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await FunModule.partner(ctx)
 
@@ -1582,7 +1673,7 @@ async def slash_unadopt(interaction: discord.Interaction, target_user: discord.M
 
 @bot.tree.command(name="family", description="View your adopted family")
 async def slash_family(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await FunModule.family(ctx)
 
@@ -1660,7 +1751,7 @@ async def slash_quote_stats(interaction: discord.Interaction):
 
 @bot.tree.command(name="profile", description="View your personal profile dashboard")
 async def slash_profile(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await FunModule.profile(ctx)
 
@@ -1701,7 +1792,7 @@ async def slash_trivia(interaction: discord.Interaction, rounds: int):
 
 @bot.tree.command(name="trivia_config", description="Choose which trivia categories appear in your games")
 async def slash_trivia_config(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any"): return
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     ctx = InteractionContext(interaction)
     await TriviaModule.open_config(ctx, user_data)
@@ -1709,7 +1800,7 @@ async def slash_trivia_config(interaction: discord.Interaction):
 
 @bot.tree.command(name="quick_trivia", description="Single trivia question — first correct answer wins 10 beans")
 async def slash_quick_trivia(interaction: discord.Interaction, category: Optional[str] = None):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     await interaction.response.defer()
     ctx = InteractionContext(interaction)
@@ -1718,10 +1809,23 @@ async def slash_quick_trivia(interaction: discord.Interaction, category: Optiona
 
 @bot.tree.command(name="trivia_stats", description="View your personal trivia statistics")
 async def slash_trivia_stats(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     ctx = InteractionContext(interaction)
     await TriviaModule.trivia_stats(ctx, user_data)
+
+
+@bot.tree.command(name="dm_server", description="Pick which server your DM-invoked commands route to")
+async def slash_dm_server(interaction: discord.Interaction, action: Optional[str] = None):
+    if not await slash_auth_check(interaction, "any"): return
+    user_data = DataStorage.get_or_create_user(interaction.user.id)
+    ctx = InteractionContext(interaction)
+    if action and action.lower() == "clear":
+        user_data.default_dm_guild_id = None
+        DataStorage.save_user_data()
+        await ctx.send("✅ DM default server cleared.")
+        return
+    await _open_dm_server_picker(ctx, user_data)
 
 
 # --- Emotes ---
@@ -1956,14 +2060,14 @@ async def slash_thanks(interaction: discord.Interaction, target: Optional[discor
 
 @bot.tree.command(name="shift", description="Work a shift at the cafe to earn Coffee Beans")
 async def slash_shift(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.shift(ctx)
 
 
 @bot.tree.command(name="beans", description="Check your current Coffee Bean balance")
 async def slash_beans(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.beans(ctx)
 
@@ -1984,7 +2088,7 @@ async def slash_bean_top(interaction: discord.Interaction):
 
 @bot.tree.command(name="daily", description="Claim your daily Coffee Bean reward")
 async def slash_daily(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.daily(ctx)
 
@@ -1998,14 +2102,14 @@ async def slash_cafe_status(interaction: discord.Interaction):
 
 @bot.tree.command(name="slots", description="Spin the slot machine and bet your Coffee Beans")
 async def slash_slots(interaction: discord.Interaction, bet: int):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.slots(ctx, bet)
 
 
 @bot.tree.command(name="blackjack", description="Play blackjack against the dealer and bet your Coffee Beans")
 async def slash_blackjack(interaction: discord.Interaction, bet: int):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.blackjack(ctx, bet)
 
@@ -2019,35 +2123,35 @@ async def slash_lottery(interaction: discord.Interaction):
 
 @bot.tree.command(name="lottery_buy", description="Buy lottery tickets (50 beans each, max 10 per round)")
 async def slash_lottery_buy(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.lottery_buy(ctx, amount)
 
 
 @bot.tree.command(name="bank", description="View your bank balance, cap, and upgrade info")
 async def slash_bank(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.bank(ctx)
 
 
 @bot.tree.command(name="deposit", description="Move beans from your wallet into your bank")
 async def slash_deposit(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.deposit(ctx, amount)
 
 
 @bot.tree.command(name="withdraw", description="Move beans from your bank back to your wallet")
 async def slash_withdraw(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.withdraw(ctx, amount)
 
 
 @bot.tree.command(name="bank_upgrade", description="Purchase the next bank tier to increase your storage cap")
 async def slash_bank_upgrade(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.bank_upgrade(ctx)
 

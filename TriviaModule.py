@@ -309,8 +309,8 @@ async def quick_trivia(ctx, user_data, category: str = None):
             msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
             if is_correct_answer(msg.content, acceptable_answers):
                 official_answer = acceptable_answers[0].capitalize()
-                guild_id = str(ctx.guild.id)
                 winner_data = DataStorage.get_or_create_user(msg.author.id)
+                guild_id = winner_data.effective_guild_id(ctx)
                 winner_data.state(guild_id).trivia_correct += 1
                 winner_data.ajust_beans(guild_id, 10)
                 DataStorage.save_user_data()
@@ -328,7 +328,7 @@ async def quick_trivia(ctx, user_data, category: str = None):
 
 async def trivia_stats(ctx, user_data):
     """Show a user's per-server trivia statistics."""
-    guild_id = str(ctx.guild.id)
+    guild_id = user_data.effective_guild_id(ctx)
     state = user_data.state(guild_id)
     embed = discord.Embed(
         title=f"🧠 {ctx.author.display_name}'s Trivia Stats",

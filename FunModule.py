@@ -141,8 +141,8 @@ async def unadopt(ctx, member):
 
 async def family(ctx):
     author_id = ctx.author.id
-    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(author_id)
+    guild_id = user_data.effective_guild_id(ctx)
 
     parents = user_data.get_adopted_by(guild_id)
     children = user_data.get_adopted_children(guild_id)
@@ -772,8 +772,8 @@ async def magic_eight_ball(ctx, question: str):
 async def partner(ctx):
     """Lists your current partners and the time you've been together."""
     author_id = ctx.author.id
-    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(author_id)
+    guild_id = user_data.effective_guild_id(ctx)
 
     partners = user_data.get_marriage_partners(guild_id)
 
@@ -912,8 +912,8 @@ async def quote_stats(ctx):
 async def profile(ctx):
     """Show a personal profile dashboard."""
     author_id = ctx.author.id
-    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(author_id)
+    guild_id = user_data.effective_guild_id(ctx)
     state = user_data.state(guild_id)
 
     partners = user_data.get_marriage_partners(guild_id)
