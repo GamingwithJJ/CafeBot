@@ -60,8 +60,17 @@ config = dotenv_values(".env")
 DataStorage.administrators = config.get("administrators").split(",")
 
 
-def is_authorized(required_type: str = "any"):
+_DM_REJECT_MESSAGE = "⚠️ This command must be used in a server, not a DM."
+
+
+def is_authorized(required_type: str = "any", guild_only: bool = False):
     async def predicate(ctx):
+        # Guild gate — applies to all non-"any" auth types implicitly, plus any "any" command
+        # that opts in. Even bot-admin DMs are blocked because per-guild commands need guild context.
+        needs_guild = guild_only or required_type != "any"
+        if needs_guild and ctx.guild is None:
+            await ctx.send(_DM_REJECT_MESSAGE)
+            return False
 
         if str(ctx.author.id) in DataStorage.administrators:
             return True
@@ -120,7 +129,11 @@ async def is_authorized_interaction(interaction: discord.Interaction, required_t
     return False
 
 
-async def slash_auth_check(interaction: discord.Interaction, required_type: str) -> bool:
+async def slash_auth_check(interaction: discord.Interaction, required_type: str, guild_only: bool = False) -> bool:
+    needs_guild = guild_only or required_type != "any"
+    if needs_guild and interaction.guild is None:
+        await interaction.response.send_message(_DM_REJECT_MESSAGE, ephemeral=True)
+        return False
     if not await is_authorized_interaction(interaction, required_type):
         await interaction.response.send_message("🚫 You don't have permission to use this command.", ephemeral=True)
         return False
@@ -363,9 +376,12 @@ COMMAND_MODULES = {
             ("`.add_trivia <category> <sub_category> <question> <answers>`", "Add a new question to the trivia bank. Wrap fields containing spaces in quotes. Answers should be a comma-separated list of all acceptable answers (e.g. `\"coffee, java, beans\"`)", "bot_admin"),
             ("`.remove_trivia <category> [sub_category] <question>`", "Remove a question from the trivia bank by fuzzy search. Sub-category is optional; omit it to search the whole category. Wrap fields containing spaces in quotes.", "bot_admin"),
             ("`.admin_tip <user> <amount>`", "Grant a user beans without requiring the admin to have funds.", "bot_admin"),
+            ("`.admin_lottery_start [ticket_cap] [duration] [max_per_user]`", "Start a new lottery. Ticket cap, duration (e.g. `30m`, `1h`, `2d`), or both can end the round; use `0`/`none` to omit either. Defaults to 10 tickets per user.", "bot_admin"),
+            ("`.admin_lottery_cancel`", "Cancel the active lottery and refund all ticket buyers.", "bot_admin"),
             ("`.admin_lottery_add <amount>`", "Add beans directly to the lottery pot to seed prize pool.", "bot_admin"),
             ("`.admin_lottery_give <user> <amount>`", "Grant lottery tickets to a user without requiring bean payment.", "bot_admin"),
             ("`.force_lottery_draw`", "Draw a lottery winner and reset the pool", "bot_admin"),
+            ("`.admin_jackpot_set <amount>`", "Set the per-server slots jackpot pool to an exact bean amount (use `0` to clear).", "bot_admin"),
             ("`.force_marry <user1> <user2>`", "Force two users into a marriage without mutual consent", "bot_admin"),
             ("`.force_divorce <user1> <user2>`", "Force dissolve a marriage between two users", "bot_admin"),
             ("`.force_adopt <parent> <child>`", "Force an adoption relationship — first user becomes the parent", "bot_admin"),
@@ -564,31 +580,31 @@ async def character_delete(ctx, *, name: str):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def marry(ctx, target_user: discord.Member):
     await FunModule.marry(ctx, target_user)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def divorce(ctx, target_user: discord.Member):
     await FunModule.divorce(ctx, target_user)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def adopt(ctx, target_user: discord.Member):
     await FunModule.adopt(ctx, target_user)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def unadopt(ctx, target_user: discord.Member):
     await FunModule.unadopt(ctx, target_user)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def family(ctx):
     await FunModule.family(ctx)
 
@@ -606,7 +622,7 @@ async def duel(ctx, target: discord.Member):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quote(ctx):
     await FunModule.quote(ctx)
 
@@ -865,49 +881,49 @@ async def remove_eight_ball(ctx, *, response: str):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def shift(ctx):
     await EconomyModule.shift(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def beans(ctx):
     await EconomyModule.beans(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def tip(ctx, target: discord.Member, amount: float):
     await EconomyModule.tip(ctx, target, amount)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def partner(ctx):
     await FunModule.partner(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def marriage_top(ctx):
     await FunModule.marriage_top(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def bean_top(ctx):
     await EconomyModule.bean_top(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def cafe_status(ctx):
     await EconomyModule.cafe_status(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quote_list(ctx, user: str, amount: int = 1):
     if amount > 5 and not check_cmd_permission(ctx, "server_admin"):
         await ctx.send("You can only send five quotes at a time.")
@@ -916,37 +932,37 @@ async def quote_list(ctx, user: str, amount: int = 1):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quote_count(ctx, user: str):
     await FunModule.quote_count(ctx, user)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quote_top(ctx):
     await FunModule.quote_top(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quote_search(ctx, *, keyword: str):
     await FunModule.quote_search(ctx, keyword)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quote_stats(ctx):
     await FunModule.quote_stats(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def profile(ctx):
     await FunModule.profile(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quotes(ctx, amount: int):
     if amount > 5 and not check_cmd_permission(ctx, "server_admin"):
         await ctx.send("You can only list 5 quotes at a time.")
@@ -961,46 +977,46 @@ async def coinflip(ctx):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def daily(ctx):
     await EconomyModule.daily(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def slots(ctx, bet: int):
     await EconomyModule.slots(ctx, bet)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def blackjack(ctx, bet: int):
     await EconomyModule.blackjack(ctx, bet)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def lottery(ctx):
     await EconomyModule.lottery(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def lottery_buy(ctx, amount: int):
     await EconomyModule.lottery_buy(ctx, amount)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def bank(ctx):
     await EconomyModule.bank(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def deposit(ctx, amount: str):
     if amount.lower() == "all":
-        amount = int(DataStorage.get_or_create_user(ctx.author.id).get_beans())
+        amount = int(DataStorage.get_or_create_user(ctx.author.id).get_beans(str(ctx.guild.id)))
     else:
         try:
             amount = int(amount)
@@ -1011,19 +1027,19 @@ async def deposit(ctx, amount: str):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def withdraw(ctx, amount: int):
     await EconomyModule.withdraw(ctx, amount)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def bank_upgrade(ctx):
     await EconomyModule.bank_upgrade(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def rob(ctx, target: discord.Member):
     await EconomyModule.rob(ctx, target)
 
@@ -1116,7 +1132,7 @@ async def verse_search(ctx, max_results: int, *, query: str):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def trivia(ctx, rounds: int):
     """Starts a trivia session using the user's config."""
     user_data = DataStorage.get_or_create_user(ctx.author.id)
@@ -1137,14 +1153,14 @@ async def trivia(ctx, rounds: int):
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def quick_trivia(ctx, category: str = None):
     user_data = DataStorage.get_or_create_user(ctx.author.id)
     await TriviaModule.quick_trivia(ctx, user_data, category)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def trivia_stats(ctx):
     user_data = DataStorage.get_or_create_user(ctx.author.id)
     await TriviaModule.trivia_stats(ctx, user_data)
@@ -1227,6 +1243,12 @@ async def admin_lottery_add(ctx, amount: int):
 
 @bot.command()
 @is_authorized("bot_admin")
+async def admin_jackpot_set(ctx, amount: int):
+    await BotAdminModule.admin_jackpot_set(ctx, amount)
+
+
+@bot.command()
+@is_authorized("bot_admin")
 async def admin_lottery_give(ctx, target: discord.Member, amount: int):
     await BotAdminModule.admin_lottery_give(ctx, target, amount)
 
@@ -1278,42 +1300,42 @@ async def trivia_config(ctx):
 # --- MUSIC COMMANDS ---
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def play(ctx, *, search: str):
     """Searches YouTube and plays a song! Usage: .play <song name>"""
     await MusicModule.play_song(ctx, search)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def skip(ctx):
     """Skips the currently playing song."""
     await MusicModule.skip_song(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def queue(ctx):
     """Shows the currently playing song and upcoming queue."""
     await MusicModule.show_queue(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def pause(ctx):
     """Pauses or resumes the currently playing song."""
     await MusicModule.pause_song(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def loop(ctx):
     """Toggles looping for the current song."""
     await MusicModule.toggle_loop(ctx)
 
 
 @bot.command()
-@is_authorized("any")
+@is_authorized("any", guild_only=True)
 async def leave(ctx):
     """Clears the queue and makes the bot leave the voice channel."""
     await MusicModule.leave_channel(ctx)
@@ -1518,49 +1540,49 @@ async def slash_character_delete(interaction: discord.Interaction, name: str):
 
 @bot.tree.command(name="marry", description="Send a marriage proposal to another user")
 async def slash_marry(interaction: discord.Interaction, target_user: discord.Member):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.marry(ctx, target_user)
 
 
 @bot.tree.command(name="divorce", description="Divorce one of your partners")
 async def slash_divorce(interaction: discord.Interaction, target_user: discord.Member):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.divorce(ctx, target_user)
 
 
 @bot.tree.command(name="partner", description="View your marriage certificate")
 async def slash_partner(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.partner(ctx)
 
 
 @bot.tree.command(name="marriage_top", description="See the top 10 longest-running marriages")
 async def slash_marriage_top(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.marriage_top(ctx)
 
 
 @bot.tree.command(name="adopt", description="Send or confirm an adoption request")
 async def slash_adopt(interaction: discord.Interaction, target_user: discord.Member):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.adopt(ctx, target_user)
 
 
 @bot.tree.command(name="unadopt", description="Dissolve an adoption relationship")
 async def slash_unadopt(interaction: discord.Interaction, target_user: discord.Member):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.unadopt(ctx, target_user)
 
 
 @bot.tree.command(name="family", description="View your adopted family")
 async def slash_family(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.family(ctx)
 
@@ -1583,14 +1605,14 @@ async def slash_duel(interaction: discord.Interaction, target: discord.Member):
 
 @bot.tree.command(name="quote", description="Display a random quote from the database")
 async def slash_quote(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.quote(ctx)
 
 
 @bot.tree.command(name="quotes", description="Display multiple random quotes at once (max 5)")
 async def slash_quotes(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     if amount > 5 and not await is_authorized_interaction(interaction, "server_admin"):
         await interaction.response.send_message("You can only list 5 quotes at a time.", ephemeral=True)
         return
@@ -1600,7 +1622,7 @@ async def slash_quotes(interaction: discord.Interaction, amount: int):
 
 @bot.tree.command(name="quote_list", description="Display random quotes from a specific person")
 async def slash_quote_list(interaction: discord.Interaction, user: str, amount: int = 1):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     if amount > 5 and not await is_authorized_interaction(interaction, "server_admin"):
         await interaction.response.send_message("You can only send five quotes at a time.", ephemeral=True)
         return
@@ -1610,35 +1632,35 @@ async def slash_quote_list(interaction: discord.Interaction, user: str, amount: 
 
 @bot.tree.command(name="quote_count", description="Check how many quotes a specific person has saved")
 async def slash_quote_count(interaction: discord.Interaction, user: str):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.quote_count(ctx, user)
 
 
 @bot.tree.command(name="quote_top", description="See the top 10 people with the most quotes")
 async def slash_quote_top(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.quote_top(ctx)
 
 
 @bot.tree.command(name="quote_search", description="Search quotes by keyword or phrase")
 async def slash_quote_search(interaction: discord.Interaction, keyword: str):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.quote_search(ctx, keyword)
 
 
 @bot.tree.command(name="quote_stats", description="Show quote database statistics")
 async def slash_quote_stats(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.quote_stats(ctx)
 
 
 @bot.tree.command(name="profile", description="View your personal profile dashboard")
 async def slash_profile(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await FunModule.profile(ctx)
 
@@ -1659,7 +1681,7 @@ async def slash_coinflip(interaction: discord.Interaction):
 
 @bot.tree.command(name="trivia", description="Start a multiplayer trivia session in this channel")
 async def slash_trivia(interaction: discord.Interaction, rounds: int):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     is_admin = str(interaction.user.id) in DataStorage.administrators or (
         interaction.guild and interaction.guild.get_member(interaction.user.id) and
@@ -1679,7 +1701,7 @@ async def slash_trivia(interaction: discord.Interaction, rounds: int):
 
 @bot.tree.command(name="trivia_config", description="Choose which trivia categories appear in your games")
 async def slash_trivia_config(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     ctx = InteractionContext(interaction)
     await TriviaModule.open_config(ctx, user_data)
@@ -1687,7 +1709,7 @@ async def slash_trivia_config(interaction: discord.Interaction):
 
 @bot.tree.command(name="quick_trivia", description="Single trivia question — first correct answer wins 10 beans")
 async def slash_quick_trivia(interaction: discord.Interaction, category: Optional[str] = None):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     await interaction.response.defer()
     ctx = InteractionContext(interaction)
@@ -1696,7 +1718,7 @@ async def slash_quick_trivia(interaction: discord.Interaction, category: Optiona
 
 @bot.tree.command(name="trivia_stats", description="View your personal trivia statistics")
 async def slash_trivia_stats(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     ctx = InteractionContext(interaction)
     await TriviaModule.trivia_stats(ctx, user_data)
@@ -1934,105 +1956,105 @@ async def slash_thanks(interaction: discord.Interaction, target: Optional[discor
 
 @bot.tree.command(name="shift", description="Work a shift at the cafe to earn Coffee Beans")
 async def slash_shift(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.shift(ctx)
 
 
 @bot.tree.command(name="beans", description="Check your current Coffee Bean balance")
 async def slash_beans(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.beans(ctx)
 
 
 @bot.tree.command(name="tip", description="Send some of your Coffee Beans to another user")
 async def slash_tip(interaction: discord.Interaction, target: discord.Member, amount: float):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.tip(ctx, target, amount)
 
 
 @bot.tree.command(name="bean_top", description="See the top 10 richest users by Coffee Bean balance")
 async def slash_bean_top(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.bean_top(ctx)
 
 
 @bot.tree.command(name="daily", description="Claim your daily Coffee Bean reward")
 async def slash_daily(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.daily(ctx)
 
 
 @bot.tree.command(name="cafe_status", description="Show a server-wide snapshot of cafe activity")
 async def slash_cafe_status(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.cafe_status(ctx)
 
 
 @bot.tree.command(name="slots", description="Spin the slot machine and bet your Coffee Beans")
 async def slash_slots(interaction: discord.Interaction, bet: int):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.slots(ctx, bet)
 
 
 @bot.tree.command(name="blackjack", description="Play blackjack against the dealer and bet your Coffee Beans")
 async def slash_blackjack(interaction: discord.Interaction, bet: int):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.blackjack(ctx, bet)
 
 
 @bot.tree.command(name="lottery", description="Check the current lottery pot and your ticket count")
 async def slash_lottery(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.lottery(ctx)
 
 
 @bot.tree.command(name="lottery_buy", description="Buy lottery tickets (50 beans each, max 10 per round)")
 async def slash_lottery_buy(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.lottery_buy(ctx, amount)
 
 
 @bot.tree.command(name="bank", description="View your bank balance, cap, and upgrade info")
 async def slash_bank(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.bank(ctx)
 
 
 @bot.tree.command(name="deposit", description="Move beans from your wallet into your bank")
 async def slash_deposit(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.deposit(ctx, amount)
 
 
 @bot.tree.command(name="withdraw", description="Move beans from your bank back to your wallet")
 async def slash_withdraw(interaction: discord.Interaction, amount: int):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.withdraw(ctx, amount)
 
 
 @bot.tree.command(name="bank_upgrade", description="Purchase the next bank tier to increase your storage cap")
 async def slash_bank_upgrade(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.bank_upgrade(ctx)
 
 
 @bot.tree.command(name="rob", description="Attempt to steal beans from another user's wallet")
 async def slash_rob(interaction: discord.Interaction, target: discord.Member):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.rob(ctx, target)
 
@@ -2127,7 +2149,7 @@ async def slash_verse_bookmarks(interaction: discord.Interaction):
 
 @bot.tree.command(name="play", description="Search YouTube and add a song to the queue")
 async def slash_play(interaction: discord.Interaction, search: str):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     await interaction.response.defer()
     ctx = InteractionContext(interaction)
     await MusicModule.play_song(ctx, search)
@@ -2135,35 +2157,35 @@ async def slash_play(interaction: discord.Interaction, search: str):
 
 @bot.tree.command(name="skip", description="Skip the currently playing song")
 async def slash_skip(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await MusicModule.skip_song(ctx)
 
 
 @bot.tree.command(name="queue", description="Show the current music queue")
 async def slash_queue(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await MusicModule.show_queue(ctx)
 
 
 @bot.tree.command(name="pause", description="Pause or resume the currently playing song")
 async def slash_pause(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await MusicModule.pause_song(ctx)
 
 
 @bot.tree.command(name="loop", description="Toggle loop mode for the current song")
 async def slash_loop(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await MusicModule.toggle_loop(ctx)
 
 
 @bot.tree.command(name="leave", description="Clear the queue and disconnect from the voice channel")
 async def slash_leave(interaction: discord.Interaction):
-    if not await slash_auth_check(interaction, "any"): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await MusicModule.leave_channel(ctx)
 

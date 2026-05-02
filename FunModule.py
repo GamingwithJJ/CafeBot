@@ -16,6 +16,7 @@ async def marry(ctx, member):
     target_user_id = member.id
     author = ctx.author
     author_user_id = author.id
+    guild_id = str(ctx.guild.id)
 
     target_user_data = get_or_create_user(target_user_id)
     author_user_data = get_or_create_user(author_user_id)
@@ -28,26 +29,26 @@ async def marry(ctx, member):
         await ctx.send("You can't marry a bot!")
         return
 
-    if target_user_id in author_user_data.get_marriage_partners():
+    if target_user_id in author_user_data.get_marriage_partners(guild_id):
         await ctx.send("You are already married to this person!")
         return
 
-    if target_user_data.get_request("marriage", author_user_id) is not None:
+    if target_user_data.get_request(guild_id, "marriage", author_user_id) is not None:
         await ctx.send("You have already sent a request to this user")
         return
 
     request_to_send = Request("marriage", author_user_id)
-    target_user_data.add_request("marriage", request_to_send)
+    target_user_data.add_request(guild_id, "marriage", request_to_send)
     await ctx.send(f"Sent request to {member}")
 
     # Check if that user already sent the user a request, if so Marry them.
-    if author_user_data.get_request("marriage", target_user_id) is not None:
+    if author_user_data.get_request(guild_id, "marriage", target_user_id) is not None:
         # Remove the requests
-        author_user_data.remove_request_by_data("marriage", target_user_id)
-        target_user_data.remove_request(request_to_send)
+        author_user_data.remove_request_by_data(guild_id, "marriage", target_user_id)
+        target_user_data.remove_request(guild_id, request_to_send)
         # Add the partners
-        author_user_data.add_marriage_partner(target_user_id)
-        target_user_data.add_marriage_partner(author_user_id)
+        author_user_data.add_marriage_partner(guild_id, target_user_id)
+        target_user_data.add_marriage_partner(guild_id, author_user_id)
         await ctx.send("You are both now married! Congratulations!")
 
     DataStorage.save_user_data() # Temorary. Saves the file every time.
@@ -56,15 +57,16 @@ async def marry(ctx, member):
 async def divorce(ctx, member):
     author_id = ctx.author.id
     target_id = member.id
+    guild_id = str(ctx.guild.id)
     author_data = get_or_create_user(author_id)
 
-    if target_id not in author_data.get_marriage_partners():
+    if target_id not in author_data.get_marriage_partners(guild_id):
         await ctx.send("💔 You aren't married to that person!")
         return
 
     partner_data = get_or_create_user(target_id)
-    author_data.remove_marriage_partner(target_id)
-    partner_data.remove_marriage_partner(author_id)
+    author_data.remove_marriage_partner(guild_id, target_id)
+    partner_data.remove_marriage_partner(guild_id, author_id)
     DataStorage.save_user_data()
 
     await ctx.send(f"📜 {ctx.author.mention} has divorced <@{target_id}>. The papers have been signed.")
@@ -73,6 +75,7 @@ async def divorce(ctx, member):
 async def adopt(ctx, member):
     author_id = ctx.author.id
     target_id = member.id
+    guild_id = str(ctx.guild.id)
 
     if author_id == target_id:
         await ctx.send("You can't adopt yourself!")
@@ -85,26 +88,26 @@ async def adopt(ctx, member):
     author_data = get_or_create_user(author_id)
     target_data = get_or_create_user(target_id)
 
-    if target_id in author_data.get_adopted_children():
+    if target_id in author_data.get_adopted_children(guild_id):
         await ctx.send("You have already adopted this person!")
         return
 
-    if target_id in author_data.get_adopted_by():
+    if target_id in author_data.get_adopted_by(guild_id):
         await ctx.send("You can't adopt someone who has already adopted you!")
         return
 
-    if target_data.get_request("adoption", author_id) is not None:
+    if target_data.get_request(guild_id, "adoption", author_id) is not None:
         await ctx.send("You have already sent an adoption request to this user!")
         return
 
     request_to_send = Request("adoption", author_id)
-    target_data.add_request("adoption", request_to_send)
+    target_data.add_request(guild_id, "adoption", request_to_send)
 
-    if author_data.get_request("adoption", target_id) is not None:
-        author_data.remove_request_by_data("adoption", target_id)
-        target_data.remove_request(request_to_send)
-        target_data.add_adopted_child(author_id)
-        author_data.add_adopted_parent(target_id)
+    if author_data.get_request(guild_id, "adoption", target_id) is not None:
+        author_data.remove_request_by_data(guild_id, "adoption", target_id)
+        target_data.remove_request(guild_id, request_to_send)
+        target_data.add_adopted_child(guild_id, author_id)
+        author_data.add_adopted_parent(guild_id, target_id)
         DataStorage.save_user_data()
         await ctx.send(f"Adoption complete! You have been adopted by {member.mention}! 👨‍👧")
     else:
@@ -115,20 +118,21 @@ async def adopt(ctx, member):
 async def unadopt(ctx, member):
     author_id = ctx.author.id
     target_id = member.id
+    guild_id = str(ctx.guild.id)
 
     author_data = get_or_create_user(author_id)
     target_data = get_or_create_user(target_id)
 
-    if target_id in author_data.get_adopted_children():
+    if target_id in author_data.get_adopted_children(guild_id):
         # Author is the parent
-        author_data.remove_adopted_child(target_id)
-        target_data.remove_adopted_parent(author_id)
+        author_data.remove_adopted_child(guild_id, target_id)
+        target_data.remove_adopted_parent(guild_id, author_id)
         DataStorage.save_user_data()
         await ctx.send(f"📜 The adoption of {member.mention} has been dissolved.")
-    elif target_id in author_data.get_adopted_by():
+    elif target_id in author_data.get_adopted_by(guild_id):
         # Author is the child
-        target_data.remove_adopted_child(author_id)
-        author_data.remove_adopted_parent(target_id)
+        target_data.remove_adopted_child(guild_id, author_id)
+        author_data.remove_adopted_parent(guild_id, target_id)
         DataStorage.save_user_data()
         await ctx.send(f"📜 Your adoption by {member.mention} has been dissolved.")
     else:
@@ -137,10 +141,11 @@ async def unadopt(ctx, member):
 
 async def family(ctx):
     author_id = ctx.author.id
+    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(author_id)
 
-    parents = user_data.get_adopted_by()
-    children = user_data.get_adopted_children()
+    parents = user_data.get_adopted_by(guild_id)
+    children = user_data.get_adopted_children(guild_id)
 
     if not parents and not children:
         embed = discord.Embed(
@@ -168,16 +173,17 @@ async def family(ctx):
     await ctx.send(embed=embed)
 
 
-def get_family_neighbors(user_id: int) -> dict:
+def get_family_neighbors(guild_id, user_id: int) -> dict:
     user = DataStorage.get_or_create_user(user_id)
     return {
-        "parents": list(user.get_adopted_by()),
-        "children": list(user.get_adopted_children()),
-        "partners": list(user.get_marriage_partners()),
+        "parents": list(user.get_adopted_by(guild_id)),
+        "children": list(user.get_adopted_children(guild_id)),
+        "partners": list(user.get_marriage_partners(guild_id)),
     }
 
 
 def build_family_subgraph(
+    guild_id,
     root_id: int,
     max_up: int = 2,
     max_down: int = 2,
@@ -200,7 +206,7 @@ def build_family_subgraph(
             continue
 
         visited.add(user_id)
-        neighbors = get_family_neighbors(user_id)
+        neighbors = get_family_neighbors(guild_id, user_id)
         graph[user_id] = neighbors
 
         if include_partners:
@@ -497,11 +503,13 @@ async def render_family_tree_image(ctx, root_id: int, graph: dict) -> str:
 
 async def family_tree(ctx, member: discord.Member = None):
     target = member or ctx.author
+    guild_id = str(ctx.guild.id)
     max_up = 2
     max_down = 2
     max_nodes = 25
 
     graph, truncated = build_family_subgraph(
+        guild_id,
         target.id,
         max_up=max_up,
         max_down=max_down,
@@ -764,9 +772,10 @@ async def magic_eight_ball(ctx, question: str):
 async def partner(ctx):
     """Lists your current partners and the time you've been together."""
     author_id = ctx.author.id
+    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(author_id)
 
-    partners = user_data.get_marriage_partners()
+    partners = user_data.get_marriage_partners(guild_id)
 
     if not partners:
         embed = discord.Embed(
@@ -786,7 +795,7 @@ async def partner(ctx):
     embed.add_field(name="👤 User", value=ctx.author.mention, inline=False)
 
     for pid in partners:
-        date = user_data.get_partner_gained_date(pid)
+        date = user_data.get_partner_gained_date(guild_id, pid)
         if date:
             ts = int(date.timestamp())
             date_str = f"<t:{ts}:D> (<t:{ts}:R>)"
@@ -798,8 +807,8 @@ async def partner(ctx):
     all_partner_children = set()
     for pid in partners:
         pd = DataStorage.get_or_create_user(pid)
-        all_partner_children |= set(pd.get_adopted_children())
-    shared = set(user_data.get_adopted_children()) & all_partner_children
+        all_partner_children |= set(pd.get_adopted_children(guild_id))
+    shared = set(user_data.get_adopted_children(guild_id)) & all_partner_children
     if shared:
         embed.add_field(name="👨‍👩‍👧 Shared Children", value=" ".join(f"<@{cid}>" for cid in shared), inline=False)
 
@@ -817,15 +826,16 @@ async def partner(ctx):
 
 
 async def marriage_top(ctx):
-    """Lists the top 10 marriages ordered by length married"""
+    """Lists the top 10 marriages in this server ordered by length married"""
     user_saves = DataStorage.user_data
+    guild_id = str(ctx.guild.id)
 
     pairs = []
     for user_id, user in user_saves.items():
-        for pid in user.get_marriage_partners():
+        for pid in user.get_marriage_partners(guild_id):
             # Only emit each pair once by requiring user_id < str(pid)
             if user_id < str(pid):
-                date = user.get_partner_gained_date(pid)
+                date = user.get_partner_gained_date(guild_id, pid)
                 if date:
                     pairs.append((user_id, pid, date))
 
@@ -902,16 +912,18 @@ async def quote_stats(ctx):
 async def profile(ctx):
     """Show a personal profile dashboard."""
     author_id = ctx.author.id
+    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(author_id)
+    state = user_data.state(guild_id)
 
-    partners = user_data.get_marriage_partners()
+    partners = user_data.get_marriage_partners(guild_id)
     if partners:
         partner_display = " ".join(f"<@{pid}>" for pid in partners)
     else:
         partner_display = "Single 💔"
 
     author_name = ctx.author.display_name.lower().capitalize()
-    guild_quotes = DataStorage.quotes.get(str(ctx.guild.id), {}) if ctx.guild else {}
+    guild_quotes = DataStorage.quotes.get(guild_id, {})
     quote_count = len(guild_quotes.get(author_name, []))
 
     embed = discord.Embed(
@@ -919,14 +931,14 @@ async def profile(ctx):
         color=discord.Color.from_rgb(111, 78, 55)
     )
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
-    embed.add_field(name="💰 Beans", value=f"{user_data.get_beans():.0f}", inline=True)
+    embed.add_field(name="💰 Beans", value=f"{user_data.get_beans(guild_id):.0f}", inline=True)
     embed.add_field(name="💍 Partner", value=partner_display, inline=True)
     embed.add_field(name="🎙️ Quotes in DB", value=str(quote_count), inline=True)
     embed.add_field(name="⚔️ D&D Characters", value=str(len(user_data.characters)), inline=True)
-    embed.add_field(name="📅 Daily Streak", value=f"{user_data.daily_reward_streak} days", inline=True)
-    embed.add_field(name="💍 Total Marriages", value=str(user_data.total_marriages), inline=True)
-    embed.add_field(name="💔 Total Divorces", value=str(user_data.total_divorces), inline=True)
-    embed.add_field(name="🧠 Trivia Wins", value=str(user_data.trivia_correct), inline=True)
+    embed.add_field(name="📅 Daily Streak", value=f"{state.daily_reward_streak} days", inline=True)
+    embed.add_field(name="💍 Total Marriages", value=str(state.total_marriages), inline=True)
+    embed.add_field(name="💔 Total Divorces", value=str(state.total_divorces), inline=True)
+    embed.add_field(name="🧠 Trivia Wins", value=str(state.trivia_correct), inline=True)
     embed.add_field(name="📖 Bookmarked Verses", value=str(len(user_data.bookmarked_verses)), inline=True)
     embed.set_footer(text="CafeBot Profile | ☕")
     await ctx.send(embed=embed)

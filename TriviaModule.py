@@ -196,7 +196,7 @@ async def start_session(ctx, rounds: int, user_data):
                             f"✅ **{msg.author.display_name}** got it right! The answer was: {official_answer}")
 
                         scores[msg.author] = scores.get(msg.author, 0) + 1
-                        DataStorage.get_or_create_user(msg.author.id).trivia_correct += 1
+                        DataStorage.get_or_create_user(msg.author.id).state(str(ctx.guild.id)).trivia_correct += 1
                         break
 
             except asyncio.TimeoutError:
@@ -224,8 +224,9 @@ async def start_session(ctx, rounds: int, user_data):
         )
 
         reward_amount = winning_score * 25
+        guild_id = str(ctx.guild.id)
         user_winner_data = DataStorage.get_or_create_user(winner.id)
-        user_winner_data.ajust_beans(reward_amount)
+        user_winner_data.ajust_beans(guild_id, reward_amount)
         DataStorage.save_user_data()
 
         embed.set_footer(text=f"Awarded {reward_amount} Coffee Beans to the winner!")
@@ -308,9 +309,10 @@ async def quick_trivia(ctx, user_data, category: str = None):
             msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
             if is_correct_answer(msg.content, acceptable_answers):
                 official_answer = acceptable_answers[0].capitalize()
+                guild_id = str(ctx.guild.id)
                 winner_data = DataStorage.get_or_create_user(msg.author.id)
-                winner_data.trivia_correct += 1
-                winner_data.ajust_beans(10)
+                winner_data.state(guild_id).trivia_correct += 1
+                winner_data.ajust_beans(guild_id, 10)
                 DataStorage.save_user_data()
                 result = await ctx.send(f"✅ **{msg.author.display_name}** got it! The answer was: **{official_answer}**. +10 beans!", view=view)
                 view.message = result
@@ -325,12 +327,14 @@ async def quick_trivia(ctx, user_data, category: str = None):
 
 
 async def trivia_stats(ctx, user_data):
-    """Show a user's personal trivia statistics."""
+    """Show a user's per-server trivia statistics."""
+    guild_id = str(ctx.guild.id)
+    state = user_data.state(guild_id)
     embed = discord.Embed(
         title=f"🧠 {ctx.author.display_name}'s Trivia Stats",
         color=discord.Color.blue()
     )
-    embed.add_field(name="✅ Correct Answers", value=str(user_data.trivia_correct), inline=True)
+    embed.add_field(name="✅ Correct Answers (this server)", value=str(state.trivia_correct), inline=True)
     enabled = user_data.enabled_trivia_categories
     cats_str = ", ".join(c.capitalize() for c in enabled) if enabled else "None configured"
     embed.add_field(name="📂 Enabled Categories", value=cats_str, inline=False)

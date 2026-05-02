@@ -343,30 +343,32 @@ async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
         await ctx.send("❌ Can't force-marry a bot.")
         return
 
+    guild_id = str(ctx.guild.id)
     user1_data = DataStorage.get_or_create_user(user1.id)
     user2_data = DataStorage.get_or_create_user(user2.id)
 
-    if user2.id in user1_data.get_marriage_partners():
+    if user2.id in user1_data.get_marriage_partners(guild_id):
         await ctx.send("❌ These users are already married to each other.")
         return
 
-    user1_data.add_marriage_partner(user2.id)
-    user2_data.add_marriage_partner(user1.id)
+    user1_data.add_marriage_partner(guild_id, user2.id)
+    user2_data.add_marriage_partner(guild_id, user1.id)
     DataStorage.save_user_data()
     await ctx.send(f"💍 {user1.mention} and {user2.mention} have been force-married.")
 
 
 async def force_divorce(ctx, user1: discord.Member, user2: discord.Member):
     """Force dissolve a marriage between two users."""
+    guild_id = str(ctx.guild.id)
     user1_data = DataStorage.get_or_create_user(user1.id)
     user2_data = DataStorage.get_or_create_user(user2.id)
 
-    if user2.id not in user1_data.get_marriage_partners():
+    if user2.id not in user1_data.get_marriage_partners(guild_id):
         await ctx.send("❌ These users are not married to each other.")
         return
 
-    user1_data.remove_marriage_partner(user2.id)
-    user2_data.remove_marriage_partner(user1.id)
+    user1_data.remove_marriage_partner(guild_id, user2.id)
+    user2_data.remove_marriage_partner(guild_id, user1.id)
     DataStorage.save_user_data()
     await ctx.send(f"📜 {user1.mention} and {user2.mention} have been force-divorced.")
 
@@ -380,35 +382,37 @@ async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Memb
         await ctx.send("❌ Can't force-adopt a bot.")
         return
 
+    guild_id = str(ctx.guild.id)
     parent_data = DataStorage.get_or_create_user(parent_user.id)
     child_data = DataStorage.get_or_create_user(child_user.id)
 
-    if child_user.id in parent_data.get_adopted_children():
+    if child_user.id in parent_data.get_adopted_children(guild_id):
         await ctx.send("❌ This adoption relationship already exists.")
         return
-    if child_user.id in parent_data.get_adopted_by():
+    if child_user.id in parent_data.get_adopted_by(guild_id):
         await ctx.send("❌ Can't adopt someone who has already adopted you.")
         return
 
-    parent_data.add_adopted_child(child_user.id)
-    child_data.add_adopted_parent(parent_user.id)
+    parent_data.add_adopted_child(guild_id, child_user.id)
+    child_data.add_adopted_parent(guild_id, parent_user.id)
     DataStorage.save_user_data()
     await ctx.send(f"👨‍👧 {parent_user.mention} has been made the parent of {child_user.mention}.")
 
 
 async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
     """Force dissolve an adoption relationship between two users."""
+    guild_id = str(ctx.guild.id)
     user1_data = DataStorage.get_or_create_user(user1.id)
     user2_data = DataStorage.get_or_create_user(user2.id)
 
-    if user2.id in user1_data.get_adopted_children():
-        user1_data.remove_adopted_child(user2.id)
-        user2_data.remove_adopted_parent(user1.id)
+    if user2.id in user1_data.get_adopted_children(guild_id):
+        user1_data.remove_adopted_child(guild_id, user2.id)
+        user2_data.remove_adopted_parent(guild_id, user1.id)
         DataStorage.save_user_data()
         await ctx.send(f"📜 Adoption dissolved: {user1.mention} is no longer the parent of {user2.mention}.")
-    elif user2.id in user1_data.get_adopted_by():
-        user2_data.remove_adopted_child(user1.id)
-        user1_data.remove_adopted_parent(user2.id)
+    elif user2.id in user1_data.get_adopted_by(guild_id):
+        user2_data.remove_adopted_child(guild_id, user1.id)
+        user1_data.remove_adopted_parent(guild_id, user2.id)
         DataStorage.save_user_data()
         await ctx.send(f"📜 Adoption dissolved: {user2.mention} is no longer the parent of {user1.mention}.")
     else:
@@ -466,7 +470,7 @@ async def admin_lottery_cancel(ctx):
     for user_id, ticket_count in entries.items():
         refund = ticket_count * EconomyModule.LOTTERY_TICKET_COST
         user = DataStorage.get_or_create_user(int(user_id))
-        user.ajust_beans(refund)
+        user.ajust_beans(guild_id, refund)
         refund_count += 1
 
     DataStorage.lottery_active.pop(guild_id, None)
@@ -512,6 +516,22 @@ async def admin_lottery_add(ctx, amount: int):
     await ctx.send(embed=embed)
 
 
+async def admin_jackpot_set(ctx, amount: int):
+    """Set the per-server slots jackpot pool to an exact amount."""
+    if amount < 0:
+        await ctx.send("Amount must be zero or positive.")
+        return
+    guild_id = str(ctx.guild.id)
+    DataStorage.set_jackpot(guild_id, amount)
+    DataStorage.save_jackpot()
+    embed = discord.Embed(
+        title="🎰 Jackpot Updated",
+        description=f"Set the slots jackpot to **{amount:,}** beans.",
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
+
+
 async def admin_lottery_give(ctx, target: discord.Member, amount: int):
     """Grant lottery tickets to a user without requiring bean payment."""
     if amount <= 0:
@@ -535,9 +555,11 @@ async def admin_lottery_give(ctx, target: discord.Member, amount: int):
 
 
 async def admin_user_info(ctx, target: discord.Member):
-    """Display a full summary of a user's saved data."""
+    """Display a full summary of a user's saved data for the current server."""
+    guild_id = str(ctx.guild.id)
     user = DataStorage.get_or_create_user(target.id)
-    cap = EconomyModule.BANK_UPGRADE_TIERS[user.bank_level]
+    state = user.state(guild_id)
+    cap = EconomyModule.BANK_UPGRADE_TIERS[state.bank_level]
 
     embed = discord.Embed(
         title=f"🔍 User Info — {target.display_name}",
@@ -549,35 +571,35 @@ async def admin_user_info(ctx, target: discord.Member):
     embed.add_field(
         name="💰 Economy",
         value=(
-            f"**Wallet:** {int(user.get_beans()):,} beans\n"
-            f"**Bank:** {int(user.bank_balance):,} / {cap:,} beans (Level {user.bank_level})"
+            f"**Wallet:** {int(user.get_beans(guild_id)):,} beans\n"
+            f"**Bank:** {int(state.bank_balance):,} / {cap:,} beans (Level {state.bank_level})"
         ),
         inline=False
     )
 
     # Social
-    spouses = ", ".join(f"<@{pid}>" for pid in user.marriage_partner) or "None"
-    children = ", ".join(f"<@{cid}>" for cid in user.adopted_children) or "None"
-    parents = ", ".join(f"<@{pid}>" for pid in user.adopted_by) or "None"
+    spouses = ", ".join(f"<@{pid}>" for pid in state.marriage_partner) or "None"
+    children = ", ".join(f"<@{cid}>" for cid in state.adopted_children) or "None"
+    parents = ", ".join(f"<@{pid}>" for pid in state.adopted_by) or "None"
     embed.add_field(
         name="💍 Social",
         value=(
             f"**Spouses:** {spouses}\n"
             f"**Children:** {children}\n"
             f"**Parents:** {parents}\n"
-            f"**Total Marriages:** {user.total_marriages} | **Divorces:** {user.total_divorces}"
+            f"**Total Marriages:** {state.total_marriages} | **Divorces:** {state.total_divorces}"
         ),
         inline=False
     )
 
     # Stats
-    last_shift = user.last_shift.strftime("%Y-%m-%d %H:%M") if user.last_shift else "Never"
-    last_daily = user.last_daily.strftime("%Y-%m-%d %H:%M") if user.last_daily else "Never"
+    last_shift = state.last_shift.strftime("%Y-%m-%d %H:%M") if state.last_shift else "Never"
+    last_daily = state.last_daily.strftime("%Y-%m-%d %H:%M") if state.last_daily else "Never"
     embed.add_field(
         name="📊 Stats",
         value=(
-            f"**Daily Streak:** {user.daily_reward_streak}\n"
-            f"**Trivia Correct:** {user.trivia_correct}\n"
+            f"**Daily Streak:** {state.daily_reward_streak}\n"
+            f"**Trivia Correct:** {state.trivia_correct}\n"
             f"**Last Shift:** {last_shift}\n"
             f"**Last Daily:** {last_daily}"
         ),
@@ -587,10 +609,11 @@ async def admin_user_info(ctx, target: discord.Member):
     # Moderation
     embed.add_field(
         name="🔨 Moderation",
-        value=f"**Warnings (this server):** {len(user.get_warnings(str(ctx.guild.id)))}",
+        value=f"**Warnings (this server):** {len(user.get_warnings(guild_id))}",
         inline=False
     )
 
+    embed.set_footer(text="All economy/social data shown is for this server only.")
     await ctx.send(embed=embed)
 
 
@@ -600,8 +623,9 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
         await ctx.send("Amount must be greater or less than 0.")
         return
 
+    guild_id = str(ctx.guild.id)
     target_data = DataStorage.get_or_create_user(target.id)
-    target_data.ajust_beans(amount)
+    target_data.ajust_beans(guild_id, amount)
     DataStorage.save_user_data()
 
     embed = discord.Embed(
@@ -609,6 +633,6 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
         description=f"{ctx.author.mention} granted **{amount}** beans to {target.mention}!",
         color=discord.Color.green()
     )
-    embed.add_field(name=f"{target.display_name}'s New Balance", value=f"{int(target_data.get_beans())} beans")
+    embed.add_field(name=f"{target.display_name}'s New Balance", value=f"{int(target_data.get_beans(guild_id))} beans")
 
     await ctx.send(embed=embed)

@@ -48,6 +48,9 @@ lottery_entries = {}  # guild_id_str → {discord_id_str: ticket count}
 lottery_active = {}  # guild_id_str → {ticket_cap, end_time, max_per_user, channel_id}
 LOTTERY_FILE = "Saves/lottery.json"
 
+jackpot_pot = {}  # guild_id_str → float
+JACKPOT_FILE = "Saves/jackpot.json"
+
 """
 Checks if a user with a specified discord id exists and creats one if it does not.
 """
@@ -195,6 +198,48 @@ def get_lottery_active(guild_id):
     return lottery_active.get(str(guild_id))
 
 
+def get_jackpot(guild_id):
+    return jackpot_pot.get(str(guild_id), 0.0)
+
+
+def add_to_jackpot(guild_id, amount):
+    gid = str(guild_id)
+    jackpot_pot[gid] = jackpot_pot.get(gid, 0.0) + float(amount)
+
+
+def reset_jackpot(guild_id):
+    jackpot_pot[str(guild_id)] = 0.0
+
+
+def set_jackpot(guild_id, amount):
+    jackpot_pot[str(guild_id)] = float(amount)
+
+
+def save_jackpot():
+    """Saves jackpot state to JSON file."""
+    try:
+        with open(JACKPOT_FILE, "w", encoding="utf-8") as f:
+            json.dump(jackpot_pot, f, indent=4)
+        print("✅ Jackpot state saved!")
+    except Exception as e:
+        print(f"❌ Error saving jackpot state: {e}")
+
+
+def load_jackpot():
+    """Loads jackpot state from JSON file."""
+    global jackpot_pot
+    if os.path.exists(JACKPOT_FILE):
+        try:
+            with open(JACKPOT_FILE, "r", encoding="utf-8") as f:
+                jackpot_pot = json.load(f)
+            print(f"✅ Jackpot loaded — {len(jackpot_pot)} server(s)")
+        except Exception as e:
+            print(f"❌ Error loading jackpot state: {e}")
+            jackpot_pot = {}
+    else:
+        jackpot_pot = {}
+
+
 def save_all():
     """Saves all bot configuration data."""
     save_quotes()
@@ -205,6 +250,7 @@ def save_all():
     save_trivia_bank()
     save_bible_index()
     save_lottery()
+    save_jackpot()
 
 
 def load_bible_index():
@@ -246,6 +292,7 @@ def load_all():
     """Loads all data from files. Returns defaults if files don't exist."""
     global quotes, gifs, gif_messages, magic_eight_ball, verses, trivia_questions
     load_lottery()
+    load_jackpot()
 
     # Load quotes
     quotes_data = {}
@@ -325,6 +372,28 @@ def save_user_data():
         return False
 
 
+def _migrate_legacy_user_record(user_dict):
+    """If a user record is in the old flat format (no guild_data), relocate
+    all per-guild fields under LEGACY_GUILD_ID. Mutates and returns user_dict.
+    """
+    # Legacy warnings: list → guild-keyed dict
+    raw_warnings = user_dict.get("warnings", {})
+    if isinstance(raw_warnings, list):
+        user_dict["warnings"] = {LEGACY_GUILD_ID: raw_warnings} if raw_warnings else {}
+
+    if "guild_data" in user_dict:
+        return user_dict  # already new format
+
+    from Classes.UserSavesClass import LEGACY_GUILD_FIELDS
+    legacy_state = {}
+    for field in LEGACY_GUILD_FIELDS:
+        if field in user_dict:
+            legacy_state[field] = user_dict.pop(field)
+
+    user_dict["guild_data"] = {LEGACY_GUILD_ID: legacy_state} if legacy_state else {}
+    return user_dict
+
+
 def load_user_data():
     global user_data
     local_user_data = {}
@@ -333,78 +402,16 @@ def load_user_data():
         with open(DATA_FILE, "r") as file:
             loaded_data = json.load(file)
 
+        migrated = 0
         for user_id, user_dict in loaded_data.items():
-            user = User(user_dict["discord_id"])
-            raw_mp = user_dict.get("marriage_partner", [])
-            if raw_mp is None:
-                user.marriage_partner = []
-            elif isinstance(raw_mp, int):
-                user.marriage_partner = [raw_mp]
-            else:
-                user.marriage_partner = raw_mp
+            had_guild_data = "guild_data" in user_dict
+            user_dict = _migrate_legacy_user_record(user_dict)
+            if not had_guild_data:
+                migrated += 1
+            local_user_data[user_id] = User.from_dict(user_dict)
 
-            raw_pgd = user_dict.get("partner_gained_date", {})
-            if raw_pgd is None:
-                user.partner_gained_date = {}
-            elif isinstance(raw_pgd, str):
-                dt = datetime.datetime.fromisoformat(raw_pgd)
-                user.partner_gained_date = {user.marriage_partner[0]: dt} if user.marriage_partner else {}
-            elif isinstance(raw_pgd, dict):
-                user.partner_gained_date = {
-                    int(k): datetime.datetime.fromisoformat(v)
-                    for k, v in raw_pgd.items()
-                }
-            else:
-                user.partner_gained_date = {}
-
-            user.beans = user_dict.get("beans", 0)
-            last_shift_string = user_dict.get("last_shift")
-            user.last_shift = datetime.datetime.fromisoformat(last_shift_string) if last_shift_string else None
-            last_daily_string = user_dict.get("last_daily")
-            user.last_daily = datetime.datetime.fromisoformat(last_daily_string) if last_daily_string else None
-            user.daily_reward_streak = user_dict.get("daily_reward_streak", 0)
-            user.total_marriages = user_dict.get("total_marriages", 0)
-            user.total_divorces = user_dict.get("total_divorces", 0)
-            user.enabled_trivia_categories = user_dict.get("enabled_trivia_categories", [])
-            user.trivia_correct = user_dict.get("trivia_correct", 0)
-            user.bookmarked_verses = user_dict.get("bookmarked_verses", [])
-            raw_warnings = user_dict.get("warnings", {})
-            if isinstance(raw_warnings, list):
-                user.warnings = {LEGACY_GUILD_ID: raw_warnings} if raw_warnings else {}
-            else:
-                user.warnings = raw_warnings
-            user.bank_balance = user_dict.get("bank_balance", 0.0)
-            user.bank_level = user_dict.get("bank_level", 0)
-            last_rob_str = user_dict.get("last_rob")
-            user.last_rob = datetime.datetime.fromisoformat(last_rob_str) if last_rob_str else None
-            rob_immunity_str = user_dict.get("rob_immunity_until")
-            user.rob_immunity_until = datetime.datetime.fromisoformat(rob_immunity_str) if rob_immunity_str else None
-            user.adopted_children = user_dict.get("adopted_children", [])
-            raw_adopted_by = user_dict.get("adopted_by", [])
-            if raw_adopted_by is None:
-                user.adopted_by = []
-            elif isinstance(raw_adopted_by, int):
-                user.adopted_by = [raw_adopted_by]  # migrate old single-value saves
-            else:
-                user.adopted_by = raw_adopted_by
-
-            # Rebuild DndCharacter objects
-            for char_data in user_dict.get("characters", []):
-                character = DndCharacter.from_dict(char_data)
-                user.characters.append(character)
-
-            # Rebuild Request objects
-            for request_type, request_list in user_dict.get("requests", {}).items():
-                user.requests[request_type] = []
-                for request_data in request_list:
-                    request = Request(
-                        request_data["request_type"],
-                        request_data["user_id"]
-                    )
-                    user.requests[request_type].append(request)
-
-            local_user_data[user_id] = user
-
+        if migrated:
+            print(f"⚠️ Migrated {migrated} user(s) from legacy flat format → guild_data[{LEGACY_GUILD_ID}].")
         print(f"Successfully loaded {len(local_user_data)} users from {DATA_FILE}")
         user_data = local_user_data
 

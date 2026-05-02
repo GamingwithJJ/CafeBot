@@ -26,16 +26,19 @@ ROB_IMMUNITY_MINUTES = 45
 ROB_MIN_TARGET_WALLET = 100
 
 SLOT_SYMBOLS = ["☕", "🫘", "🥐", "💰", "🍀", "7️⃣", "🌀", "⭐", "🎪", "☁️"]
+JACKPOT_CONTRIBUTION_RATE = 0.15
+SLOTS_BASE_JACKPOT_MULTIPLIER = 231
 
 
 async def beans(ctx):
     """Shows the current amount of beans the user has"""
     user = ctx.author
+    guild_id = str(ctx.guild.id)
     user_data = DataStorage.get_or_create_user(user.id)
 
     embed = discord.Embed(
         title="☕ Coffee Bean Balance",
-        description=f"**{user.display_name}** has **{int(user_data.get_beans())}** beans.",
+        description=f"**{user.display_name}** has **{int(user_data.get_beans(guild_id))}** beans.",
         color=discord.Color.from_rgb(111, 78, 55)
     )
     embed.set_thumbnail(url=user.display_avatar.url)
@@ -46,12 +49,14 @@ async def beans(ctx):
 async def shift(ctx):
     """Works a shift providing the user with currency"""
     user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = str(ctx.guild.id)
+    state = user.state(guild_id)
     current_time = datetime.datetime.now()
 
 
     # Check for cooldown
-    if user.last_shift: # If the last_shift is none, we know its a new user and can proceed as there is no cooldown
-        time_passed = current_time - user.last_shift
+    if state.last_shift: # If the last_shift is none, we know its a new user and can proceed as there is no cooldown
+        time_passed = current_time - state.last_shift
         cooldown = datetime.timedelta(minutes=BREW_COOLDOWN_TIME)
 
         if time_passed < cooldown:
@@ -67,8 +72,8 @@ async def shift(ctx):
             return
 
     beans_earned = random.randint(*BEANS_PER_BREW)
-    user.ajust_beans(beans_earned)
-    user.set_last_shift(current_time)
+    user.ajust_beans(guild_id, beans_earned)
+    user.set_last_shift(guild_id, current_time)
     DataStorage.save_user_data()
 
     embed = discord.Embed(
@@ -76,7 +81,7 @@ async def shift(ctx):
         description=f"You worked a shift at the cafe and earned **{beans_earned}** Beans!",
         color=discord.Color.from_rgb(111, 78, 55)  # Coffee brown
     )
-    embed.add_field(name="💰 New Balance", value=f"**{int(user.get_beans())}** beans", inline=False)
+    embed.add_field(name="💰 New Balance", value=f"**{int(user.get_beans(guild_id))}** beans", inline=False)
     embed.set_footer(text=f"Next shift available in {BREW_COOLDOWN_TIME} minutes")
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
@@ -88,6 +93,7 @@ async def tip(ctx, target: discord.Member, amount: float):
     author = ctx.author
     author_id = author.id
     target_id = target.id
+    guild_id = str(ctx.guild.id)
 
     if target_id == author_id:
         await ctx.send("You can't tip yourself!")
@@ -104,17 +110,17 @@ async def tip(ctx, target: discord.Member, amount: float):
     author_data = DataStorage.get_or_create_user(author_id)
     target_data = DataStorage.get_or_create_user(target_id)
 
-    if author_data.get_beans() < amount:
+    if author_data.get_beans(guild_id) < amount:
         embed = discord.Embed(
             title="❌ Insufficient Beans",
-            description=f"You only have **{int(author_data.get_beans())}** beans, but tried to tip **{int(amount)}**.",
+            description=f"You only have **{int(author_data.get_beans(guild_id))}** beans, but tried to tip **{int(amount)}**.",
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
         return
 
-    author_data.ajust_beans(-1 * amount)
-    target_data.ajust_beans(amount)
+    author_data.ajust_beans(guild_id, -1 * amount)
+    target_data.ajust_beans(guild_id, amount)
     DataStorage.save_user_data()
 
     embed = discord.Embed(
@@ -123,18 +129,20 @@ async def tip(ctx, target: discord.Member, amount: float):
         color=discord.Color.green()
     )
 
-    embed.add_field(name=f"{ctx.author.display_name}'s Balance", value=f"{int(author_data.get_beans())} beans", inline=True)
-    embed.add_field(name=f"{target.display_name}'s Balance", value=f"{int(target_data.get_beans())} beans", inline=True)
+    embed.add_field(name=f"{ctx.author.display_name}'s Balance", value=f"{int(author_data.get_beans(guild_id))} beans", inline=True)
+    embed.add_field(name=f"{target.display_name}'s Balance", value=f"{int(target_data.get_beans(guild_id))} beans", inline=True)
 
     await ctx.send(embed=embed)
 
 
 async def bean_top(ctx):
-    """Lists the top ten richest users by total beans (wallet + bank)"""
+    """Lists the top ten richest users in this server by total beans (wallet + bank)"""
     user_saves = DataStorage.user_data
+    guild_id = str(ctx.guild.id)
 
     def total_beans(u):
-        return u.beans + u.bank_balance
+        gs = u.guild_data.get(guild_id)
+        return (gs.beans + gs.bank_balance) if gs else 0
 
     top_users = sorted(
         [u for u in user_saves.values() if total_beans(u) > 0],
@@ -163,27 +171,33 @@ async def bean_top(ctx):
 async def cafe_status(ctx):
     """Show a server-wide snapshot of cafe activity."""
     user_saves = DataStorage.user_data
+    guild_id = str(ctx.guild.id)
 
-    total_beans = sum(u.beans + u.bank_balance for u in user_saves.values())
-    total_marriages = sum(len(u.marriage_partner) for u in user_saves.values()) // 2
-    total_quotes = sum(
-        len(quote_list)
-        for author_dict in DataStorage.quotes.values()
-        for quote_list in author_dict.values()
-    )
-    total_authors = len({
-        author
-        for author_dict in DataStorage.quotes.values()
-        for author in author_dict
-    })
+    total_beans = 0
+    total_marriages = 0
+    registered_users = 0
+    for u in user_saves.values():
+        gs = u.guild_data.get(guild_id)
+        if not gs:
+            continue
+        total_beans += gs.beans + gs.bank_balance
+        total_marriages += len(gs.marriage_partner)
+        if gs.beans > 0 or gs.bank_balance > 0 or gs.marriage_partner or gs.adopted_children or gs.adopted_by:
+            registered_users += 1
+    total_marriages //= 2
+
+    # Quotes are nested {guild_id: {author: [Quote]}}
+    guild_quotes = DataStorage.quotes.get(guild_id, {})
+    total_quotes = sum(len(q_list) for q_list in guild_quotes.values())
+    total_authors = len(guild_quotes)
 
     embed = discord.Embed(
         title="☕ Cafe Status",
-        description="A snapshot of the server's cafe activity!",
+        description="A snapshot of this server's cafe activity!",
         color=discord.Color.from_rgb(111, 78, 55)
     )
     embed.add_field(name="💰 Beans in Circulation", value=f"{total_beans:,.0f}", inline=True)
-    embed.add_field(name="👥 Registered Users", value=str(len(user_saves)), inline=True)
+    embed.add_field(name="👥 Active Users", value=str(registered_users), inline=True)
     embed.add_field(name="💍 Active Marriages", value=str(total_marriages), inline=True)
     embed.add_field(name="📖 Total Quotes", value=f"{total_quotes} from {total_authors} authors", inline=False)
     embed.set_footer(text="CafeBot | ☕")
@@ -193,10 +207,12 @@ async def cafe_status(ctx):
 async def daily(ctx):
     """Claim a daily reward of Coffee Beans."""
     user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = str(ctx.guild.id)
+    state = user.state(guild_id)
     now = datetime.datetime.now()
 
-    if user.last_daily:
-        time_passed = now - user.last_daily
+    if state.last_daily:
+        time_passed = now - state.last_daily
         cooldown = datetime.timedelta(hours=24)
         grace_period = datetime.timedelta(hours=48)
 
@@ -214,53 +230,64 @@ async def daily(ctx):
             return
 
         if time_passed > grace_period:
-            user.daily_reward_streak = 0
+            state.daily_reward_streak = 0
             await ctx.send("You have lost your streak!")
 
-    amount_to_reward = int(DAILY_REWARD_BASE * (1 + (user.daily_reward_streak * 0.02)))
-    user.daily_reward_streak += 1
-    user.ajust_beans(amount_to_reward)
-    user.last_daily = now
+    amount_to_reward = int(DAILY_REWARD_BASE * (1 + (state.daily_reward_streak * 0.02)))
+    state.daily_reward_streak += 1
+    user.ajust_beans(guild_id, amount_to_reward)
+    state.last_daily = now
     DataStorage.save_user_data()
 
     embed = discord.Embed(
         title="Daily Reward!",
-        description=f"You claimed your daily allowance of **{amount_to_reward}** Coffee Beans! \n Your current streak is {user.daily_reward_streak} days!",
+        description=f"You claimed your daily allowance of **{amount_to_reward}** Coffee Beans! \n Your current streak is {state.daily_reward_streak} days!",
         color=discord.Color.gold()
     )
-    embed.add_field(name="💰 New Balance", value=f"**{int(user.get_beans())}** beans")
+    embed.add_field(name="💰 New Balance", value=f"**{int(user.get_beans(guild_id))}** beans")
     embed.set_footer(text="See you tomorrow! ☕")
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
     await ctx.send(embed=embed)
 
 
+def _resolve_slots_outcome(guild_id, bet, reels):
+    """Compute the slot outcome: net change to user beans, and result text.
+
+    Mutates jackpot_pot as a side effect (loss → contributes; triple 7s → resets).
+    Returns (winnings, result_text) where winnings is the net change to beans.
+    """
+    if reels[0] == reels[1] == reels[2]:
+        if reels[0] == "7️⃣":
+            pool = DataStorage.get_jackpot(guild_id)
+            payout = max(int(pool), SLOTS_BASE_JACKPOT_MULTIPLIER * bet)
+            DataStorage.reset_jackpot(guild_id)
+            DataStorage.save_jackpot()
+            return payout - bet, f"🎰 JACKPOT! Triple 7s — won {payout:,} beans!"
+        return int(bet * 26) - bet, "🎉 Three of a kind!"
+    if reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
+        return bet, "✨ Two of a kind!"
+    DataStorage.add_to_jackpot(guild_id, bet * JACKPOT_CONTRIBUTION_RATE)
+    DataStorage.save_jackpot()
+    return -bet, "💸 No match. Better luck next time!"
+
+
 async def slots(ctx, bet: int):
     """Spin the slot machine and bet Coffee Beans."""
     user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = str(ctx.guild.id)
 
     if bet < 50:
         await ctx.send("Minimum bet is 50 beans.")
         return
-    if bet > user.get_beans():
-        await ctx.send(f"You don't have enough beans! Balance: {int(user.get_beans())}")
+    if bet > user.get_beans(guild_id):
+        await ctx.send(f"You don't have enough beans! Balance: {int(user.get_beans(guild_id))}")
         return
 
     def spin_result():
         reels = [random.choice(SLOT_SYMBOLS) for _ in range(3)]
         display = " | ".join(reels)
-        if reels[0] == reels[1] == reels[2]:
-            if reels[0] == "7️⃣":
-                multiplier, result_text = 231, "🎰 JACKPOT! Triple 7s!"
-            else:
-                multiplier, result_text = 26, "🎉 Three of a kind!"
-            winnings = int(bet * multiplier) - bet
-        elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
-            winnings = bet
-            result_text = "✨ Two of a kind!"
-        else:
-            winnings = -bet
-            result_text = "💸 No match. Better luck next time!"
+        winnings, result_text = _resolve_slots_outcome(guild_id, bet, reels)
         return display, winnings, result_text
 
     def make_embed(display, winnings, result_text):
@@ -271,7 +298,8 @@ async def slots(ctx, bet: int):
         embed.add_field(name="Bet", value=f"{bet} beans", inline=True)
         change = f"+{winnings}" if winnings >= 0 else str(winnings)
         embed.add_field(name="Change", value=f"{change} beans", inline=True)
-        embed.add_field(name="New Balance", value=f"{int(user.get_beans())} beans", inline=True)
+        embed.add_field(name="New Balance", value=f"{int(user.get_beans(guild_id))} beans", inline=True)
+        embed.add_field(name="🎰 Jackpot", value=f"{int(DataStorage.get_jackpot(guild_id)):,} beans", inline=False)
         embed.set_footer(text="CafeBot Casino | ☕🎰")
         return embed
 
@@ -285,12 +313,12 @@ async def slots(ctx, bet: int):
             if interaction.user.id != ctx.author.id:
                 await interaction.response.send_message("This isn't your game!", ephemeral=True)
                 return
-            if user.get_beans() < bet:
+            if user.get_beans(guild_id) < bet:
                 button.disabled = True
                 await interaction.response.edit_message(content="❌ Not enough beans to play again!", view=self)
                 return
             display, winnings, result_text = spin_result()
-            user.ajust_beans(winnings)
+            user.ajust_beans(guild_id, winnings)
             DataStorage.save_user_data()
             await interaction.response.edit_message(embed=make_embed(display, winnings, result_text), view=self)
 
@@ -301,7 +329,7 @@ async def slots(ctx, bet: int):
                 await self.message.edit(view=self)
 
     display, winnings, result_text = spin_result()
-    user.ajust_beans(winnings)
+    user.ajust_beans(guild_id, winnings)
     DataStorage.save_user_data()
 
     view = SlotsView()
@@ -364,6 +392,7 @@ class BlackjackView(discord.ui.View):
     def __init__(self, ctx, user, bet, deck, player_hand, dealer_hand):
         super().__init__(timeout=60)
         self.ctx = ctx
+        self.guild_id = str(ctx.guild.id)
         self.user = user
         self.bet = bet
         self.deck = deck
@@ -373,10 +402,10 @@ class BlackjackView(discord.ui.View):
 
     async def end_game(self, interaction, final_player, final_dealer):
         winnings, result_text = _bj_resolve(final_player, final_dealer, self.bet)
-        self.user.ajust_beans(winnings)
+        self.user.ajust_beans(self.guild_id, winnings)
         DataStorage.save_user_data()
         change = f"+{winnings}" if winnings >= 0 else str(winnings)
-        result_text += f"\n**{change} beans** → Balance: {int(self.user.get_beans())}"
+        result_text += f"\n**{change} beans** → Balance: {int(self.user.get_beans(self.guild_id))}"
         embed = _bj_make_embed(final_player, final_dealer, hide_dealer=False, result_text=result_text)
         self.stop()
         play_again_view = BlackjackPlayAgainView(self.ctx, self.bet)
@@ -413,7 +442,7 @@ class BlackjackView(discord.ui.View):
         while _bj_hand_value(self.dealer_hand) < 17:
             self.dealer_hand.append(self.deck.pop())
         winnings, result_text = _bj_resolve(self.player_hand, self.dealer_hand, self.bet)
-        self.user.ajust_beans(winnings)
+        self.user.ajust_beans(self.guild_id, winnings)
         DataStorage.save_user_data()
         embed = _bj_make_embed(self.player_hand, self.dealer_hand, hide_dealer=False,
                                result_text=result_text + " (timed out)")
@@ -427,6 +456,7 @@ class BlackjackPlayAgainView(discord.ui.View):
     def __init__(self, ctx, bet):
         super().__init__(timeout=60)
         self.ctx = ctx
+        self.guild_id = str(ctx.guild.id)
         self.bet = bet
         self.message = None
 
@@ -436,7 +466,7 @@ class BlackjackPlayAgainView(discord.ui.View):
             await interaction.response.send_message("This isn't your game!", ephemeral=True)
             return
         user = DataStorage.get_or_create_user(self.ctx.author.id)
-        if user.get_beans() < self.bet:
+        if user.get_beans(self.guild_id) < self.bet:
             button.disabled = True
             await interaction.response.edit_message(content="❌ Not enough beans to play again!", view=self)
             return
@@ -445,7 +475,7 @@ class BlackjackPlayAgainView(discord.ui.View):
 
         if _bj_hand_value(player_hand) == 21:
             winnings = int(self.bet * 1.5)
-            user.ajust_beans(winnings)
+            user.ajust_beans(self.guild_id, winnings)
             DataStorage.save_user_data()
             embed = _bj_make_embed(player_hand, dealer_hand, hide_dealer=False,
                                    result_text=f"🎰 BLACKJACK! +{winnings} beans")
@@ -469,19 +499,20 @@ class BlackjackPlayAgainView(discord.ui.View):
 async def blackjack(ctx, bet: int):
     """Play blackjack against the dealer."""
     user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = str(ctx.guild.id)
 
     if bet < 20:
         await ctx.send("Minimum bet is 20 beans.")
         return
-    if bet > user.get_beans():
-        await ctx.send(f"You don't have enough beans! Balance: {int(user.get_beans())}")
+    if bet > user.get_beans(guild_id):
+        await ctx.send(f"You don't have enough beans! Balance: {int(user.get_beans(guild_id))}")
         return
 
     deck, player_hand, dealer_hand = _bj_new_game()
 
     if _bj_hand_value(player_hand) == 21:
         winnings = int(bet * 1.5)
-        user.ajust_beans(winnings)
+        user.ajust_beans(guild_id, winnings)
         DataStorage.save_user_data()
         embed = _bj_make_embed(player_hand, dealer_hand, hide_dealer=False,
                                result_text=f"🎰 BLACKJACK! +{winnings} beans")
@@ -506,7 +537,7 @@ async def _execute_lottery_draw(guild_id, channel):
     winner_id = random.choices(population, weights=weights, k=1)[0]
 
     winner_data = DataStorage.get_or_create_user(int(winner_id))
-    winner_data.ajust_beans(pot)
+    winner_data.ajust_beans(guild_id, pot)
 
     DataStorage.lottery_pot[guild_id] = 0.0
     DataStorage.lottery_entries[guild_id] = {}
@@ -576,7 +607,7 @@ async def lottery(ctx):
         ),
         color=discord.Color.gold()
     )
-    embed.add_field(name="💰 Your Balance", value=f"{int(user.get_beans())} beans", inline=True)
+    embed.add_field(name="💰 Your Balance", value=f"{int(user.get_beans(guild_id))} beans", inline=True)
     embed.add_field(name="🎫 Tickets Left to Buy", value=str(tickets_remaining), inline=True)
 
     if entries:
@@ -623,16 +654,16 @@ async def lottery_buy(ctx, amount: int):
         return
 
     total_cost = amount * LOTTERY_TICKET_COST
-    if user.get_beans() < total_cost:
+    if user.get_beans(guild_id) < total_cost:
         embed = discord.Embed(
             title="❌ Insufficient Beans",
-            description=f"{amount} ticket(s) costs **{total_cost}** beans, but you only have **{int(user.get_beans())}**.",
+            description=f"{amount} ticket(s) costs **{total_cost}** beans, but you only have **{int(user.get_beans(guild_id))}**.",
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
         return
 
-    user.ajust_beans(-total_cost)
+    user.ajust_beans(guild_id, -total_cost)
     DataStorage.lottery_entries.setdefault(guild_id, {})[user_id] = tickets_held + amount
     DataStorage.lottery_pot[guild_id] = DataStorage.get_lottery_pot(guild_id) + total_cost
     DataStorage.save_user_data()
@@ -647,7 +678,7 @@ async def lottery_buy(ctx, amount: int):
     )
     embed.add_field(name="Your Tickets", value=f"{new_tickets} / {max_per_user}", inline=True)
     embed.add_field(name="Current Pot", value=f"{int(DataStorage.get_lottery_pot(guild_id)):,} beans", inline=True)
-    embed.add_field(name="New Balance", value=f"{int(user.get_beans())} beans", inline=True)
+    embed.add_field(name="New Balance", value=f"{int(user.get_beans(guild_id))} beans", inline=True)
     await ctx.send(embed=embed)
 
     ticket_cap = active.get("ticket_cap")
@@ -661,19 +692,21 @@ async def lottery_buy(ctx, amount: int):
 async def bank(ctx):
     """Show your bank balance, cap, and upgrade info."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    cap = BANK_UPGRADE_TIERS[user.bank_level]
+    guild_id = str(ctx.guild.id)
+    state = user.state(guild_id)
+    cap = BANK_UPGRADE_TIERS[state.bank_level]
     max_level = len(BANK_UPGRADE_TIERS) - 1
 
     embed = discord.Embed(
         title="🏦 Your Bank",
         color=discord.Color.from_rgb(111, 78, 55)
     )
-    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans()):,} beans", inline=True)
-    embed.add_field(name="🏦 Bank Balance", value=f"{int(user.bank_balance):,} / {cap:,} beans", inline=True)
+    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans(guild_id)):,} beans", inline=True)
+    embed.add_field(name="🏦 Bank Balance", value=f"{int(state.bank_balance):,} / {cap:,} beans", inline=True)
 
-    if user.bank_level < max_level:
-        next_cap = BANK_UPGRADE_TIERS[user.bank_level + 1]
-        upgrade_cost = BANK_UPGRADE_COSTS[user.bank_level + 1]
+    if state.bank_level < max_level:
+        next_cap = BANK_UPGRADE_TIERS[state.bank_level + 1]
+        upgrade_cost = BANK_UPGRADE_COSTS[state.bank_level + 1]
         embed.add_field(
             name="⬆️ Next Upgrade",
             value=f"Cap {cap:,} → {next_cap:,} for **{upgrade_cost:,} beans**\nUse `.bank_upgrade` to purchase",
@@ -689,14 +722,16 @@ async def bank(ctx):
 async def deposit(ctx, amount: int):
     """Move beans from wallet to bank."""
     user = DataStorage.get_or_create_user(ctx.author.id)
-    cap = BANK_UPGRADE_TIERS[user.bank_level]
-    space = cap - user.bank_balance
+    guild_id = str(ctx.guild.id)
+    state = user.state(guild_id)
+    cap = BANK_UPGRADE_TIERS[state.bank_level]
+    space = cap - state.bank_balance
 
     if amount <= 0:
         await ctx.send("Please specify a positive amount to deposit.")
         return
-    if amount > user.get_beans():
-        await ctx.send(f"You only have **{int(user.get_beans()):,}** beans in your wallet.")
+    if amount > user.get_beans(guild_id):
+        await ctx.send(f"You only have **{int(user.get_beans(guild_id)):,}** beans in your wallet.")
         return
     if space <= 0:
         await ctx.send(f"Your bank is full! ({cap:,} / {cap:,}). Upgrade your bank to store more.")
@@ -705,64 +740,68 @@ async def deposit(ctx, amount: int):
         await ctx.send(f"Your bank only has room for **{int(space):,}** more beans. Deposit that amount or upgrade your bank.")
         return
 
-    user.ajust_beans(-amount)
-    user.bank_balance = round(user.bank_balance + amount, 2)
+    user.ajust_beans(guild_id, -amount)
+    state.bank_balance = round(state.bank_balance + amount, 2)
     DataStorage.save_user_data()
     embed = discord.Embed(
         title="🏦 Deposit Successful",
         description=f"Deposited **{amount:,}** beans into your bank.",
         color=discord.Color.green()
     )
-    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans()):,} beans", inline=True)
-    embed.add_field(name="🏦 Bank", value=f"{int(user.bank_balance):,} / {cap:,} beans", inline=True)
+    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans(guild_id)):,} beans", inline=True)
+    embed.add_field(name="🏦 Bank", value=f"{int(state.bank_balance):,} / {cap:,} beans", inline=True)
     await ctx.send(embed=embed)
 
 
 async def withdraw(ctx, amount: int):
     """Move beans from bank to wallet."""
     user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = str(ctx.guild.id)
+    state = user.state(guild_id)
 
     if amount <= 0:
         await ctx.send("Please specify a positive amount to withdraw.")
         return
-    if amount > user.bank_balance:
-        await ctx.send(f"You only have **{int(user.bank_balance):,}** beans in your bank.")
+    if amount > state.bank_balance:
+        await ctx.send(f"You only have **{int(state.bank_balance):,}** beans in your bank.")
         return
 
-    user.bank_balance = round(user.bank_balance - amount, 2)
-    user.ajust_beans(amount)
+    state.bank_balance = round(state.bank_balance - amount, 2)
+    user.ajust_beans(guild_id, amount)
     DataStorage.save_user_data()
 
-    cap = BANK_UPGRADE_TIERS[user.bank_level]
+    cap = BANK_UPGRADE_TIERS[state.bank_level]
     embed = discord.Embed(
         title="🏦 Withdrawal Successful",
         description=f"Withdrew **{amount:,}** beans from your bank.",
         color=discord.Color.green()
     )
-    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans()):,} beans", inline=True)
-    embed.add_field(name="🏦 Bank", value=f"{int(user.bank_balance):,} / {cap:,} beans", inline=True)
+    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans(guild_id)):,} beans", inline=True)
+    embed.add_field(name="🏦 Bank", value=f"{int(state.bank_balance):,} / {cap:,} beans", inline=True)
     await ctx.send(embed=embed)
 
 
 async def bank_upgrade(ctx):
     """Purchase the next bank tier."""
     user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = str(ctx.guild.id)
+    state = user.state(guild_id)
     max_level = len(BANK_UPGRADE_TIERS) - 1
 
-    if user.bank_level >= max_level:
+    if state.bank_level >= max_level:
         await ctx.send("Your bank is already at the maximum level!")
         return
 
-    next_level = user.bank_level + 1
+    next_level = state.bank_level + 1
     cost = BANK_UPGRADE_COSTS[next_level]
     new_cap = BANK_UPGRADE_TIERS[next_level]
 
-    if user.get_beans() < cost:
-        await ctx.send(f"You need **{cost:,}** beans in your wallet to upgrade, but only have **{int(user.get_beans()):,}**.")
+    if user.get_beans(guild_id) < cost:
+        await ctx.send(f"You need **{cost:,}** beans in your wallet to upgrade, but only have **{int(user.get_beans(guild_id)):,}**.")
         return
 
-    user.ajust_beans(-cost)
-    user.bank_level = next_level
+    user.ajust_beans(guild_id, -cost)
+    state.bank_level = next_level
     DataStorage.save_user_data()
 
     embed = discord.Embed(
@@ -770,7 +809,7 @@ async def bank_upgrade(ctx):
         description=f"Your bank cap is now **{new_cap:,} beans** (Level {next_level}).",
         color=discord.Color.gold()
     )
-    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans()):,} beans", inline=True)
+    embed.add_field(name="💰 Wallet", value=f"{int(user.get_beans(guild_id)):,} beans", inline=True)
     embed.add_field(name="🏦 New Cap", value=f"{new_cap:,} beans", inline=True)
     if next_level < max_level:
         embed.set_footer(text=f"Next upgrade: {BANK_UPGRADE_TIERS[next_level + 1]:,} cap for {BANK_UPGRADE_COSTS[next_level + 1]:,} beans")
@@ -782,6 +821,7 @@ async def bank_upgrade(ctx):
 async def rob(ctx, target: discord.Member):
     """Attempt to steal beans from another user's wallet."""
     author = ctx.author
+    guild_id = str(ctx.guild.id)
     now = datetime.datetime.now()
 
     if target.id == author.id:
@@ -792,10 +832,11 @@ async def rob(ctx, target: discord.Member):
         return
 
     robber = DataStorage.get_or_create_user(author.id)
+    robber_state = robber.state(guild_id)
 
-    if robber.last_rob:
+    if robber_state.last_rob:
         cooldown = datetime.timedelta(minutes=ROB_COOLDOWN_MINUTES)
-        elapsed = now - robber.last_rob
+        elapsed = now - robber_state.last_rob
         if elapsed < cooldown:
             remaining = cooldown - elapsed
             minutes, seconds = divmod(int(remaining.total_seconds()), 60)
@@ -808,9 +849,10 @@ async def rob(ctx, target: discord.Member):
             return
 
     victim = DataStorage.get_or_create_user(target.id)
+    victim_state = victim.state(guild_id)
 
-    if victim.rob_immunity_until and now < victim.rob_immunity_until:
-        remaining = victim.rob_immunity_until - now
+    if victim_state.rob_immunity_until and now < victim_state.rob_immunity_until:
+        remaining = victim_state.rob_immunity_until - now
         minutes, seconds = divmod(int(remaining.total_seconds()), 60)
         embed = discord.Embed(
             title="🛡️ Target is Protected",
@@ -820,18 +862,18 @@ async def rob(ctx, target: discord.Member):
         await ctx.send(embed=embed)
         return
 
-    if victim.get_beans() < ROB_MIN_TARGET_WALLET:
+    if victim.get_beans(guild_id) < ROB_MIN_TARGET_WALLET:
         await ctx.send(f"{target.display_name} doesn't have enough beans in their wallet to rob (minimum {ROB_MIN_TARGET_WALLET}).")
         return
 
-    robber.last_rob = now
+    robber_state.last_rob = now
 
     if random.random() < ROB_SUCCESS_RATE:
         steal_fraction = random.uniform(*ROB_STEAL_RANGE)
-        stolen = min(int(victim.get_beans() * steal_fraction), ROB_STEAL_CAP)
-        victim.ajust_beans(-stolen)
-        robber.ajust_beans(stolen)
-        victim.rob_immunity_until = now + datetime.timedelta(minutes=ROB_IMMUNITY_MINUTES)
+        stolen = min(int(victim.get_beans(guild_id) * steal_fraction), ROB_STEAL_CAP)
+        victim.ajust_beans(guild_id, -stolen)
+        robber.ajust_beans(guild_id, stolen)
+        victim_state.rob_immunity_until = now + datetime.timedelta(minutes=ROB_IMMUNITY_MINUTES)
         DataStorage.save_user_data()
 
         embed = discord.Embed(
@@ -839,12 +881,12 @@ async def rob(ctx, target: discord.Member):
             description=f"You stole **{stolen:,}** beans from {target.mention}!",
             color=discord.Color.green()
         )
-        embed.add_field(name="Your Wallet", value=f"{int(robber.get_beans()):,} beans", inline=True)
-        embed.add_field(name=f"{target.display_name}'s Wallet", value=f"{int(victim.get_beans()):,} beans", inline=True)
+        embed.add_field(name="Your Wallet", value=f"{int(robber.get_beans(guild_id)):,} beans", inline=True)
+        embed.add_field(name=f"{target.display_name}'s Wallet", value=f"{int(victim.get_beans(guild_id)):,} beans", inline=True)
         embed.set_footer(text=f"{target.display_name} is immune from robbery for {ROB_IMMUNITY_MINUTES} minutes.")
     else:
-        robber.ajust_beans(-ROB_FAILURE_FINE)
-        victim.ajust_beans(ROB_FAILURE_FINE)
+        robber.ajust_beans(guild_id, -ROB_FAILURE_FINE)
+        victim.ajust_beans(guild_id, ROB_FAILURE_FINE)
         DataStorage.save_user_data()
 
         embed = discord.Embed(
@@ -852,7 +894,7 @@ async def rob(ctx, target: discord.Member):
             description=f"Your robbery failed! You paid a **{ROB_FAILURE_FINE:,}** bean fine to {target.mention}.",
             color=discord.Color.red()
         )
-        embed.add_field(name="Your Wallet", value=f"{int(robber.get_beans()):,} beans", inline=True)
-        embed.add_field(name=f"{target.display_name}'s Wallet", value=f"{int(victim.get_beans()):,} beans", inline=True)
+        embed.add_field(name="Your Wallet", value=f"{int(robber.get_beans(guild_id)):,} beans", inline=True)
+        embed.add_field(name=f"{target.display_name}'s Wallet", value=f"{int(victim.get_beans(guild_id)):,} beans", inline=True)
 
     await ctx.send(embed=embed)
