@@ -1,4 +1,5 @@
 import random
+import asyncio
 
 import DataStorage
 import datetime
@@ -28,6 +29,14 @@ ROB_MIN_TARGET_WALLET = 100
 SLOT_SYMBOLS = ["☕", "🫘", "🥐", "💰", "🍀", "7️⃣", "🌀", "⭐", "🎪", "☁️"]
 JACKPOT_CONTRIBUTION_RATE = 0.15
 SLOTS_BASE_JACKPOT_MULTIPLIER = 231
+
+HILO_MIN_BET = 50
+HILO_MULTIPLIER = 1.4
+HILO_TIMEOUT = 30
+
+ROULETTE_MIN_BET = 25
+ROULETTE_RED = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+ROULETTE_BLACK = {2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35}
 
 
 async def beans(ctx):
@@ -902,3 +911,269 @@ async def rob(ctx, target: discord.Member):
         embed.add_field(name=f"{target.display_name}'s Wallet", value=f"{int(victim.get_beans(guild_id)):,} beans", inline=True)
 
     await ctx.send(embed=embed)
+
+
+# --- HI-LO ---
+
+_HILO_RANK_LABELS = {11: "J", 12: "Q", 13: "K", 14: "A"}
+
+
+def _hilo_rank_label(r: int) -> str:
+    return _HILO_RANK_LABELS.get(r, str(r))
+
+
+class HiLoView(discord.ui.View):
+    def __init__(self, ctx, user, bet):
+        super().__init__(timeout=HILO_TIMEOUT)
+        self.ctx = ctx
+        self.user = user
+        self.guild_id = user.effective_guild_id(ctx)
+        self.bet = bet
+        self.current_card = random.randint(2, 14)
+        self.multiplier = 1.0
+        self.guesses_made = 0
+        self.message = None
+        self.cash_out.disabled = True
+
+    def _embed(self, status: str) -> discord.Embed:
+        e = discord.Embed(title="🃏 Hi-Lo", description=status, color=discord.Color.dark_gold())
+        e.add_field(name="Card", value=f"**{_hilo_rank_label(self.current_card)}**", inline=True)
+        e.add_field(name="Bet", value=f"{self.bet:,}", inline=True)
+        e.add_field(name="Multiplier", value=f"×{self.multiplier:.2f}", inline=True)
+        return e
+
+    async def _resolve(self, interaction: discord.Interaction, direction: str):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        next_card = random.randint(2, 14)
+        if next_card == self.current_card:
+            self.current_card = next_card
+            await interaction.response.edit_message(
+                embed=self._embed(f"🤝 Push! Same rank ({_hilo_rank_label(next_card)}) — pick again."),
+                view=self,
+            )
+            return
+        won = (next_card > self.current_card and direction == "higher") or \
+              (next_card < self.current_card and direction == "lower")
+        previous = self.current_card
+        self.current_card = next_card
+        if won:
+            self.guesses_made += 1
+            self.multiplier *= HILO_MULTIPLIER
+            self.cash_out.disabled = False
+            await interaction.response.edit_message(
+                embed=self._embed(
+                    f"✅ Correct! ({_hilo_rank_label(previous)} → {_hilo_rank_label(next_card)}) "
+                    f"Multiplier ×{self.multiplier:.2f}"
+                ),
+                view=self,
+            )
+        else:
+            self.user.ajust_beans(self.guild_id, -self.bet)
+            DataStorage.save_user_data()
+            for child in self.children:
+                child.disabled = True
+            await interaction.response.edit_message(
+                embed=self._embed(
+                    f"💥 Bust! ({_hilo_rank_label(previous)} → {_hilo_rank_label(next_card)}) "
+                    f"Lost {self.bet:,} beans."
+                ),
+                view=self,
+            )
+            self.stop()
+
+    @discord.ui.button(label="Higher", emoji="⬆️", style=discord.ButtonStyle.primary)
+    async def higher(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._resolve(interaction, "higher")
+
+    @discord.ui.button(label="Lower", emoji="⬇️", style=discord.ButtonStyle.primary)
+    async def lower(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._resolve(interaction, "lower")
+
+    @discord.ui.button(label="Cash Out", emoji="💰", style=discord.ButtonStyle.success)
+    async def cash_out(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        if self.guesses_made == 0:
+            await interaction.response.send_message("You must guess at least once before cashing out.", ephemeral=True)
+            return
+        payout = int(self.bet * self.multiplier)
+        winnings = payout - self.bet
+        self.user.ajust_beans(self.guild_id, winnings)
+        DataStorage.save_user_data()
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(
+            embed=self._embed(f"💰 Cashed out! +{winnings:,} beans (×{self.multiplier:.2f})"),
+            view=self,
+        )
+        self.stop()
+
+    async def on_timeout(self):
+        if self.guesses_made == 0 or self.message is None:
+            return
+        payout = int(self.bet * self.multiplier)
+        winnings = payout - self.bet
+        self.user.ajust_beans(self.guild_id, winnings)
+        DataStorage.save_user_data()
+        for child in self.children:
+            child.disabled = True
+        try:
+            await self.message.edit(
+                embed=self._embed(f"⏱️ Auto-cashed out: +{winnings:,} beans (×{self.multiplier:.2f})"),
+                view=self,
+            )
+        except discord.DiscordException:
+            pass
+
+
+async def hilo(ctx, bet: int):
+    """Press-your-luck Hi-Lo card game."""
+    user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = user.effective_guild_id(ctx)
+    if bet < HILO_MIN_BET:
+        await ctx.send(f"Minimum bet is {HILO_MIN_BET} beans.")
+        return
+    if user.get_beans(guild_id) < bet:
+        await ctx.send("❌ You don't have enough beans for that bet.")
+        return
+    view = HiLoView(ctx, user, bet)
+    msg = await ctx.send(
+        embed=view._embed("Higher or lower? You must guess at least once before cashing out."),
+        view=view,
+    )
+    view.message = msg
+
+
+# --- ROULETTE ---
+
+
+def parse_roulette_choice(s: str):
+    """Parse a roulette choice string.
+    Returns (label, payout_multiplier, predicate) or (None, 0, None) on invalid.
+    payout_multiplier is the total multiplier applied to bet on a win
+    (e.g. 36 for a single number = 35:1 plus the original bet returned)."""
+    s = s.strip().lower()
+    if s.isdigit() and 0 <= int(s) <= 36:
+        n = int(s)
+        return (f"#{n}", 36, lambda r, _n=n: r == _n)
+    if s == "red":
+        return ("Red", 2, lambda r: r in ROULETTE_RED)
+    if s == "black":
+        return ("Black", 2, lambda r: r in ROULETTE_BLACK)
+    if s == "even":
+        return ("Even", 2, lambda r: r != 0 and r % 2 == 0)
+    if s == "odd":
+        return ("Odd", 2, lambda r: r != 0 and r % 2 == 1)
+    if s == "low":
+        return ("Low (1-18)", 2, lambda r: 1 <= r <= 18)
+    if s == "high":
+        return ("High (19-36)", 2, lambda r: 19 <= r <= 36)
+    if s in ("1st12", "first12"):
+        return ("1st 12", 3, lambda r: 1 <= r <= 12)
+    if s in ("2nd12", "second12"):
+        return ("2nd 12", 3, lambda r: 13 <= r <= 24)
+    if s in ("3rd12", "third12"):
+        return ("3rd 12", 3, lambda r: 25 <= r <= 36)
+    if s == "col1":
+        return ("Column 1", 3, lambda r: r != 0 and r % 3 == 1)
+    if s == "col2":
+        return ("Column 2", 3, lambda r: r != 0 and r % 3 == 2)
+    if s == "col3":
+        return ("Column 3", 3, lambda r: r != 0 and r % 3 == 0)
+    return (None, 0, None)
+
+
+class RoulettePlayAgainView(discord.ui.View):
+    def __init__(self, ctx, bet, choice_str):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.bet = bet
+        self.choice_str = choice_str
+        self.message = None
+
+    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green)
+    async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        await interaction.response.defer()
+        await roulette_from_string(self.ctx, self.bet, self.choice_str)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.DiscordException:
+                pass
+
+
+async def roulette(ctx, bet: int, choice_str: str, label: str, payout: int, predicate):
+    user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = user.effective_guild_id(ctx)
+    if bet < ROULETTE_MIN_BET:
+        await ctx.send(f"Minimum bet is {ROULETTE_MIN_BET} beans.")
+        return
+    if user.get_beans(guild_id) < bet:
+        await ctx.send("❌ You don't have enough beans for that bet.")
+        return
+    user.ajust_beans(guild_id, -bet)
+    DataStorage.save_user_data()
+
+    spin_embed = discord.Embed(
+        title="🎰 Roulette",
+        description=f"Spinning the wheel... **{label}**, {bet:,} beans",
+        color=discord.Color.dark_red(),
+    )
+    spin_msg = await ctx.send(embed=spin_embed)
+    await asyncio.sleep(2)
+
+    result = random.randint(0, 36)
+    if result == 0:
+        color_emoji = "🟢"
+    elif result in ROULETTE_RED:
+        color_emoji = "🔴"
+    else:
+        color_emoji = "⚫"
+
+    won = predicate(result)
+    if won:
+        gross = bet * payout
+        net = gross - bet
+        user.ajust_beans(guild_id, gross)
+        DataStorage.save_user_data()
+        outcome_embed = discord.Embed(
+            title="🎰 Roulette",
+            description=f"{color_emoji} **{result}** — {label} hit! **+{net:,} beans**",
+            color=discord.Color.green(),
+        )
+    else:
+        outcome_embed = discord.Embed(
+            title="🎰 Roulette",
+            description=f"{color_emoji} **{result}** — {label} missed. **-{bet:,} beans**",
+            color=discord.Color.red(),
+        )
+    outcome_embed.set_footer(text=f"Wallet: {int(user.get_beans(guild_id)):,} beans")
+
+    view = RoulettePlayAgainView(ctx, bet, choice_str)
+    try:
+        await spin_msg.edit(embed=outcome_embed, view=view)
+        view.message = spin_msg
+    except discord.DiscordException:
+        new_msg = await ctx.send(embed=outcome_embed, view=view)
+        view.message = new_msg
+
+
+async def roulette_from_string(ctx, bet: int, choice_str: str):
+    label, payout, predicate = parse_roulette_choice(choice_str)
+    if predicate is None:
+        await ctx.send(
+            "❌ Invalid choice. Use a number `0`-`36`, `red`/`black`, `even`/`odd`, "
+            "`low`/`high`, `1st12`/`2nd12`/`3rd12`, or `col1`/`col2`/`col3`."
+        )
+        return
+    await roulette(ctx, bet, choice_str, label, payout, predicate)

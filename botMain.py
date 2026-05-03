@@ -425,7 +425,9 @@ COMMAND_MODULES = {
             ("`.family_tree [user]`", "Render a Pillow family-tree image around yourself or another user. Shows nearby parents, children, and partners with cycle protection", "bot_admin"),
             ("`.host_check`", "Diagnose the host machine's basic platform and architecture details", "bot_admin"),
             ("`.debug_music`", "Inspect local music-runtime dependencies like Node, FFmpeg, and cookies setup", "bot_admin"),
-            ("`.debug_node`", "Test whether Node can run and report the installed yt-dlp version", "bot_admin")
+            ("`.debug_node`", "Test whether Node can run and report the installed yt-dlp version", "bot_admin"),
+            ("`.hilo <bet>`", "Press-your-luck card game. A card 2–A is drawn; bet whether the next is higher or lower. Each correct guess multiplies your pot by ×1.4. Cash out anytime after the first correct guess. Wrong guess loses your bet. Min bet 50", "bot_admin"),
+            ("`.roulette <bet> <choice>`", "Spin the European roulette wheel. Choices: a number (`0`–`36`), `red`/`black`, `even`/`odd`, `low`/`high`, `1st12`/`2nd12`/`3rd12`, `col1`/`col2`/`col3`. Numbers pay 35:1, dozens/columns pay 2:1, all other outside bets pay 1:1. Min bet 25", "bot_admin")
         ]
     }
 }
@@ -1021,6 +1023,18 @@ async def slots(ctx, bet: int):
 @is_authorized("any", guild_only=True, dm_fallback=True)
 async def blackjack(ctx, bet: int):
     await EconomyModule.blackjack(ctx, bet)
+
+
+@bot.command()
+@is_authorized("bot_admin", dm_fallback=True)
+async def hilo(ctx, bet: int):
+    await EconomyModule.hilo(ctx, bet)
+
+
+@bot.command()
+@is_authorized("bot_admin", dm_fallback=True)
+async def roulette(ctx, bet: int, *, choice: str):
+    await EconomyModule.roulette_from_string(ctx, bet, choice)
 
 
 @bot.command()
@@ -2112,6 +2126,22 @@ async def slash_blackjack(interaction: discord.Interaction, bet: int):
     if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.blackjack(ctx, bet)
+
+
+@bot.tree.command(name="hilo", description="[testing] Hi-Lo card game — guess if the next card is higher or lower")
+async def slash_hilo(interaction: discord.Interaction, bet: int):
+    if not await slash_auth_check(interaction, "bot_admin", dm_fallback=True): return
+    ctx = InteractionContext(interaction)
+    await interaction.response.defer()
+    await EconomyModule.hilo(ctx, bet)
+
+
+@bot.tree.command(name="roulette", description="[testing] Spin the European roulette wheel")
+async def slash_roulette(interaction: discord.Interaction, bet: int, choice: str):
+    if not await slash_auth_check(interaction, "bot_admin", dm_fallback=True): return
+    ctx = InteractionContext(interaction)
+    await interaction.response.defer()
+    await EconomyModule.roulette_from_string(ctx, bet, choice)
 
 
 @bot.tree.command(name="lottery", description="Check the current lottery pot and your ticket count")
