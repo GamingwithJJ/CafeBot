@@ -27,8 +27,9 @@ ROB_IMMUNITY_MINUTES = 45
 ROB_MIN_TARGET_WALLET = 100
 
 SLOT_SYMBOLS = ["☕", "🫘", "🥐", "💰", "🍀", "7️⃣", "🌀", "⭐", "🎪", "☁️"]
-JACKPOT_CONTRIBUTION_RATE = 0.15
-SLOTS_BASE_JACKPOT_MULTIPLIER = 231
+JACKPOT_CONTRIBUTION_RATE = 0.25
+SLOTS_BASE_JACKPOT_MULTIPLIER = 226
+BLACKJACK_LOSS_JACKPOT_RATE = 0.10
 
 HILO_MIN_BET = 50
 HILO_MULTIPLIER = 1.4
@@ -263,9 +264,13 @@ async def daily(ctx):
 def _resolve_slots_outcome(guild_id, bet, reels):
     """Compute the slot outcome: net change to user beans, and result text.
 
-    Mutates jackpot_pot as a side effect (loss → contributes; triple 7s → resets).
+    Mutates jackpot_pot as a side effect: every spin contributes
+    `JACKPOT_CONTRIBUTION_RATE × bet` to the pool; triple 7s resets the pool
+    when it pays the pool (i.e. when pool > floor).
     Returns (winnings, result_text) where winnings is the net change to beans.
     """
+    DataStorage.add_to_jackpot(guild_id, bet * JACKPOT_CONTRIBUTION_RATE)
+    DataStorage.save_jackpot()
     if reels[0] == reels[1] == reels[2]:
         if reels[0] == "7️⃣":
             pool = int(DataStorage.get_jackpot(guild_id))
@@ -280,8 +285,6 @@ def _resolve_slots_outcome(guild_id, bet, reels):
         return int(bet * 26) - bet, "🎉 Three of a kind!"
     if reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
         return bet, "✨ Two of a kind!"
-    DataStorage.add_to_jackpot(guild_id, bet * JACKPOT_CONTRIBUTION_RATE)
-    DataStorage.save_jackpot()
     return -bet, "💸 No match. Better luck next time!"
 
 
@@ -416,6 +419,9 @@ class BlackjackView(discord.ui.View):
     async def end_game(self, interaction, final_player, final_dealer):
         winnings, result_text = _bj_resolve(final_player, final_dealer, self.bet)
         self.user.ajust_beans(self.guild_id, winnings)
+        if winnings < 0:
+            DataStorage.add_to_jackpot(self.guild_id, self.bet * BLACKJACK_LOSS_JACKPOT_RATE)
+            DataStorage.save_jackpot()
         DataStorage.save_user_data()
         change = f"+{winnings}" if winnings >= 0 else str(winnings)
         result_text += f"\n**{change} beans** → Balance: {int(self.user.get_beans(self.guild_id))}"
@@ -456,6 +462,9 @@ class BlackjackView(discord.ui.View):
             self.dealer_hand.append(self.deck.pop())
         winnings, result_text = _bj_resolve(self.player_hand, self.dealer_hand, self.bet)
         self.user.ajust_beans(self.guild_id, winnings)
+        if winnings < 0:
+            DataStorage.add_to_jackpot(self.guild_id, self.bet * BLACKJACK_LOSS_JACKPOT_RATE)
+            DataStorage.save_jackpot()
         DataStorage.save_user_data()
         embed = _bj_make_embed(self.player_hand, self.dealer_hand, hide_dealer=False,
                                result_text=result_text + " (timed out)")
