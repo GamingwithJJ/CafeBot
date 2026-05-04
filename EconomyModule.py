@@ -1121,60 +1121,22 @@ def parse_roulette_choice(s: str):
     return (None, 0, None)
 
 
-class RoulettePlayAgainView(discord.ui.View):
-    def __init__(self, ctx, bet, choice_str):
-        super().__init__(timeout=60)
-        self.ctx = ctx
-        self.bet = bet
-        self.choice_str = choice_str
-        self.message = None
-
-    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green)
-    async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.ctx.author.id:
-            await interaction.response.send_message("This isn't your game!", ephemeral=True)
-            return
-        await interaction.response.defer()
-        await roulette_from_string(self.ctx, self.bet, self.choice_str)
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        if self.message:
-            try:
-                await self.message.edit(view=self)
-            except discord.DiscordException:
-                pass
-
-
-async def roulette(ctx, bet: int, choice_str: str, label: str, payout: int, predicate):
-    user = DataStorage.get_or_create_user(ctx.author.id)
-    guild_id = user.effective_guild_id(ctx)
-    if bet < ROULETTE_MIN_BET:
-        await ctx.send(f"Minimum bet is {ROULETTE_MIN_BET} beans.")
-        return
-    if user.get_beans(guild_id) < bet:
-        await ctx.send("❌ You don't have enough beans for that bet.")
-        return
-    user.ajust_beans(guild_id, -bet)
-    DataStorage.save_user_data()
-
+async def _resolve_roulette_spin(message, user, guild_id, bet, choice_str, ctx):
+    """Run the full spin sequence on the given message: edit to spin embed, sleep, edit to outcome + Play Again."""
+    label, payout, predicate = parse_roulette_choice(choice_str)
     spin_embed = discord.Embed(
         title="🎰 Roulette",
         description=f"Spinning the wheel... **{label}**, {bet:,} beans",
         color=discord.Color.dark_red(),
     )
-    spin_msg = await ctx.send(embed=spin_embed)
+    try:
+        await message.edit(embed=spin_embed, view=None)
+    except discord.DiscordException:
+        pass
     await asyncio.sleep(2)
 
     result = random.randint(0, 36)
-    if result == 0:
-        color_emoji = "🟢"
-    elif result in ROULETTE_RED:
-        color_emoji = "🔴"
-    else:
-        color_emoji = "⚫"
-
+    color_emoji = "🟢" if result == 0 else ("🔴" if result in ROULETTE_RED else "⚫")
     won = predicate(result)
     if won:
         gross = bet * payout
@@ -1193,22 +1155,206 @@ async def roulette(ctx, bet: int, choice_str: str, label: str, payout: int, pred
             color=discord.Color.red(),
         )
     outcome_embed.set_footer(text=f"Wallet: {int(user.get_beans(guild_id)):,} beans")
-
-    view = RoulettePlayAgainView(ctx, bet, choice_str)
+    play_view = RoulettePlayAgainView(ctx, bet, choice_str)
     try:
-        await spin_msg.edit(embed=outcome_embed, view=view)
-        view.message = spin_msg
+        await message.edit(embed=outcome_embed, view=play_view)
+        play_view.message = message
     except discord.DiscordException:
-        new_msg = await ctx.send(embed=outcome_embed, view=view)
-        view.message = new_msg
+        pass
 
 
-async def roulette_from_string(ctx, bet: int, choice_str: str):
-    label, payout, predicate = parse_roulette_choice(choice_str)
-    if predicate is None:
-        await ctx.send(
-            "❌ Invalid choice. Use a number `0`-`36`, `red`/`black`, `even`/`odd`, "
-            "`low`/`high`, `1st12`/`2nd12`/`3rd12`, or `col1`/`col2`/`col3`."
-        )
+class RouletteBetView(discord.ui.View):
+    def __init__(self, ctx, bet):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.bet = bet
+        self.message = None
+
+    async def _check_owner(self, interaction):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return False
+        return True
+
+    async def _start_spin(self, interaction, choice_str):
+        user = DataStorage.get_or_create_user(self.ctx.author.id)
+        guild_id = user.effective_guild_id(self.ctx)
+        if user.get_beans(guild_id) < self.bet:
+            await interaction.response.send_message("❌ Not enough beans for that bet.", ephemeral=True)
+            return
+        user.ajust_beans(guild_id, -self.bet)
+        DataStorage.save_user_data()
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.defer()
+        await _resolve_roulette_spin(interaction.message, user, guild_id, self.bet, choice_str, self.ctx)
+        self.stop()
+
+    @discord.ui.button(label="Red", style=discord.ButtonStyle.danger, row=0)
+    async def red(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "red")
+
+    @discord.ui.button(label="Black", style=discord.ButtonStyle.secondary, row=0)
+    async def black(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "black")
+
+    @discord.ui.button(label="Even", style=discord.ButtonStyle.primary, row=0)
+    async def even(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "even")
+
+    @discord.ui.button(label="Odd", style=discord.ButtonStyle.primary, row=0)
+    async def odd(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "odd")
+
+    @discord.ui.button(label="Low (1-18)", style=discord.ButtonStyle.primary, row=1)
+    async def low(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "low")
+
+    @discord.ui.button(label="High (19-36)", style=discord.ButtonStyle.primary, row=1)
+    async def high(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "high")
+
+    @discord.ui.button(label="1st 12", style=discord.ButtonStyle.secondary, row=1)
+    async def first12(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "1st12")
+
+    @discord.ui.button(label="2nd 12", style=discord.ButtonStyle.secondary, row=1)
+    async def second12(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "2nd12")
+
+    @discord.ui.button(label="3rd 12", style=discord.ButtonStyle.secondary, row=1)
+    async def third12(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "3rd12")
+
+    @discord.ui.button(label="Col 1", style=discord.ButtonStyle.secondary, row=2)
+    async def col1(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "col1")
+
+    @discord.ui.button(label="Col 2", style=discord.ButtonStyle.secondary, row=2)
+    async def col2(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "col2")
+
+    @discord.ui.button(label="Col 3", style=discord.ButtonStyle.secondary, row=2)
+    async def col3(self, interaction, button):
+        if await self._check_owner(interaction):
+            await self._start_spin(interaction, "col3")
+
+    @discord.ui.button(label="Pick Number", emoji="🔢", style=discord.ButtonStyle.success, row=2)
+    async def pick_number(self, interaction, button):
+        if await self._check_owner(interaction):
+            await interaction.response.send_modal(RouletteNumberModal(self))
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.DiscordException:
+                pass
+
+
+class RouletteNumberModal(discord.ui.Modal, title="🎰 Pick a Number"):
+    number_input = discord.ui.TextInput(
+        label="Number (0-36)",
+        placeholder="e.g. 17",
+        min_length=1,
+        max_length=2,
+        required=True,
+    )
+
+    def __init__(self, parent_view: RouletteBetView):
+        super().__init__()
+        self.parent_view = parent_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            n = int(self.number_input.value.strip())
+        except ValueError:
+            await interaction.response.send_message("❌ Invalid number — must be 0-36.", ephemeral=True)
+            return
+        if not 0 <= n <= 36:
+            await interaction.response.send_message("❌ Number must be 0-36.", ephemeral=True)
+            return
+        user = DataStorage.get_or_create_user(self.parent_view.ctx.author.id)
+        guild_id = user.effective_guild_id(self.parent_view.ctx)
+        if user.get_beans(guild_id) < self.parent_view.bet:
+            await interaction.response.send_message("❌ Not enough beans for that bet.", ephemeral=True)
+            return
+        user.ajust_beans(guild_id, -self.parent_view.bet)
+        DataStorage.save_user_data()
+        for item in self.parent_view.children:
+            item.disabled = True
+        await interaction.response.defer()
+        if self.parent_view.message:
+            await _resolve_roulette_spin(self.parent_view.message, user, guild_id, self.parent_view.bet, str(n), self.parent_view.ctx)
+        self.parent_view.stop()
+
+
+class RoulettePlayAgainView(discord.ui.View):
+    def __init__(self, ctx, bet, choice_str):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.bet = bet
+        self.choice_str = choice_str
+        self.message = None
+
+    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green)
+    async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        user = DataStorage.get_or_create_user(self.ctx.author.id)
+        guild_id = user.effective_guild_id(self.ctx)
+        if user.get_beans(guild_id) < self.bet:
+            button.disabled = True
+            await interaction.response.edit_message(content="❌ Not enough beans to play again.", view=self)
+            return
+        user.ajust_beans(guild_id, -self.bet)
+        DataStorage.save_user_data()
+        await interaction.response.defer()
+        await _resolve_roulette_spin(interaction.message, user, guild_id, self.bet, self.choice_str, self.ctx)
+        self.stop()
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.DiscordException:
+                pass
+
+
+async def roulette(ctx, bet: int):
+    """Open the Roulette bet picker."""
+    user = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = user.effective_guild_id(ctx)
+    if bet < ROULETTE_MIN_BET:
+        await ctx.send(f"Minimum bet is {ROULETTE_MIN_BET} beans.")
         return
-    await roulette(ctx, bet, choice_str, label, payout, predicate)
+    if user.get_beans(guild_id) < bet:
+        await ctx.send("❌ You don't have enough beans for that bet.")
+        return
+    embed = discord.Embed(
+        title="🎰 Roulette",
+        description=f"**Bet: {bet:,} beans**\n\nPick your bet type below.",
+        color=discord.Color.dark_red(),
+    )
+    embed.add_field(name="Outside (1:1)", value="🔴 Red · ⚫ Black · Even · Odd · Low · High", inline=False)
+    embed.add_field(name="Dozens & Columns (2:1)", value="1st / 2nd / 3rd 12 · Col 1 / 2 / 3", inline=False)
+    embed.add_field(name="Single Number (35:1)", value="🔢 Pick Number → enter 0-36", inline=False)
+    view = RouletteBetView(ctx, bet)
+    msg = await ctx.send(embed=embed, view=view)
+    view.message = msg
