@@ -1239,8 +1239,8 @@ async def remove_trivia(ctx, category: str, *args):
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def admin_tip(ctx, target: discord.Member, amount: float):
+@is_authorized("bot_admin", dm_fallback=True)
+async def admin_tip(ctx, target: discord.User, amount: float):
     """
     Usage: .admin_tip @user <amount>
     Grants beans to a user without requiring the admin to have funds.
@@ -1249,7 +1249,7 @@ async def admin_tip(ctx, target: discord.Member, amount: float):
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("bot_admin", dm_fallback=True)
 async def admin_lottery_start(ctx, ticket_cap: str = "0", duration: str = "none", max_per_user: int = 10):
     """
     Usage: .admin_lottery_start [ticket_cap] [duration] [max_per_user]
@@ -1272,63 +1272,63 @@ async def admin_lottery_start(ctx, ticket_cap: str = "0", duration: str = "none"
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("bot_admin", dm_fallback=True)
 async def admin_lottery_cancel(ctx):
     """Cancel the active lottery and refund all ticket buyers."""
     await BotAdminModule.admin_lottery_cancel(ctx)
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("bot_admin", dm_fallback=True)
 async def admin_lottery_add(ctx, amount: int):
     await BotAdminModule.admin_lottery_add(ctx, amount)
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("bot_admin", dm_fallback=True)
 async def admin_jackpot_set(ctx, amount: int):
     await BotAdminModule.admin_jackpot_set(ctx, amount)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def admin_lottery_give(ctx, target: discord.Member, amount: int):
+@is_authorized("bot_admin", dm_fallback=True)
+async def admin_lottery_give(ctx, target: discord.User, amount: int):
     await BotAdminModule.admin_lottery_give(ctx, target, amount)
 
 
 @bot.command()
-@is_authorized("bot_admin")
+@is_authorized("bot_admin", dm_fallback=True)
 async def force_lottery_draw(ctx):
     await BotAdminModule.force_lottery_draw(ctx)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
+@is_authorized("bot_admin", dm_fallback=True)
+async def force_marry(ctx, user1: discord.User, user2: discord.User):
     await BotAdminModule.force_marry(ctx, user1, user2)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def force_divorce(ctx, user1: discord.Member, user2: discord.Member):
+@is_authorized("bot_admin", dm_fallback=True)
+async def force_divorce(ctx, user1: discord.User, user2: discord.User):
     await BotAdminModule.force_divorce(ctx, user1, user2)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Member):
+@is_authorized("bot_admin", dm_fallback=True)
+async def force_adopt(ctx, parent_user: discord.User, child_user: discord.User):
     await BotAdminModule.force_adopt(ctx, parent_user, child_user)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
+@is_authorized("bot_admin", dm_fallback=True)
+async def force_unadopt(ctx, user1: discord.User, user2: discord.User):
     await BotAdminModule.force_unadopt(ctx, user1, user2)
 
 
 @bot.command()
-@is_authorized("bot_admin")
-async def admin_user_info(ctx, target: discord.Member):
+@is_authorized("bot_admin", dm_fallback=True)
+async def admin_user_info(ctx, target: discord.User):
     await BotAdminModule.admin_user_info(ctx, target)
 
 

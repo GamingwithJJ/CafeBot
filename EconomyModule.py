@@ -972,15 +972,15 @@ class HiLoView(discord.ui.View):
         else:
             self.user.ajust_beans(self.guild_id, -self.bet)
             DataStorage.save_user_data()
-            for child in self.children:
-                child.disabled = True
+            play_again_view = HiLoPlayAgainView(self.ctx, self.bet)
             await interaction.response.edit_message(
                 embed=self._embed(
                     f"💥 Bust! ({_hilo_rank_label(previous)} → {_hilo_rank_label(next_card)}) "
                     f"Lost {self.bet:,} beans."
                 ),
-                view=self,
+                view=play_again_view,
             )
+            play_again_view.message = interaction.message
             self.stop()
 
     @discord.ui.button(label="Higher", emoji="⬆️", style=discord.ButtonStyle.primary)
@@ -1003,12 +1003,12 @@ class HiLoView(discord.ui.View):
         winnings = payout - self.bet
         self.user.ajust_beans(self.guild_id, winnings)
         DataStorage.save_user_data()
-        for child in self.children:
-            child.disabled = True
+        play_again_view = HiLoPlayAgainView(self.ctx, self.bet)
         await interaction.response.edit_message(
             embed=self._embed(f"💰 Cashed out! +{winnings:,} beans (×{self.multiplier:.2f})"),
-            view=self,
+            view=play_again_view,
         )
+        play_again_view.message = interaction.message
         self.stop()
 
     async def on_timeout(self):
@@ -1018,15 +1018,50 @@ class HiLoView(discord.ui.View):
         winnings = payout - self.bet
         self.user.ajust_beans(self.guild_id, winnings)
         DataStorage.save_user_data()
-        for child in self.children:
-            child.disabled = True
+        play_again_view = HiLoPlayAgainView(self.ctx, self.bet)
         try:
             await self.message.edit(
                 embed=self._embed(f"⏱️ Auto-cashed out: +{winnings:,} beans (×{self.multiplier:.2f})"),
-                view=self,
+                view=play_again_view,
             )
+            play_again_view.message = self.message
         except discord.DiscordException:
             pass
+
+
+class HiLoPlayAgainView(discord.ui.View):
+    def __init__(self, ctx, bet):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.bet = bet
+        self.guild_id = DataStorage.get_or_create_user(ctx.author.id).effective_guild_id(ctx)
+        self.message = None
+
+    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green)
+    async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return
+        user = DataStorage.get_or_create_user(self.ctx.author.id)
+        if user.get_beans(self.guild_id) < self.bet:
+            button.disabled = True
+            await interaction.response.edit_message(content="❌ Not enough beans to play again.", view=self)
+            return
+        new_view = HiLoView(self.ctx, user, self.bet)
+        await interaction.response.edit_message(
+            embed=new_view._embed("Higher or lower? You must guess at least once before cashing out."),
+            view=new_view,
+        )
+        new_view.message = interaction.message
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.DiscordException:
+                pass
 
 
 async def hilo(ctx, bet: int):

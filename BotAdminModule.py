@@ -334,7 +334,7 @@ async def remove_trivia(ctx, category: str, sub_category: str | None, question: 
             return
 
 
-async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
+async def force_marry(ctx, user1: discord.User, user2: discord.User):
     """Force two users into a marriage without mutual consent."""
     if user1.id == user2.id:
         await ctx.send("❌ You can't marry a user to themselves.")
@@ -343,7 +343,8 @@ async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
         await ctx.send("❌ Can't force-marry a bot.")
         return
 
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     user1_data = DataStorage.get_or_create_user(user1.id)
     user2_data = DataStorage.get_or_create_user(user2.id)
 
@@ -357,9 +358,10 @@ async def force_marry(ctx, user1: discord.Member, user2: discord.Member):
     await ctx.send(f"💍 {user1.mention} and {user2.mention} have been force-married.")
 
 
-async def force_divorce(ctx, user1: discord.Member, user2: discord.Member):
+async def force_divorce(ctx, user1: discord.User, user2: discord.User):
     """Force dissolve a marriage between two users."""
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     user1_data = DataStorage.get_or_create_user(user1.id)
     user2_data = DataStorage.get_or_create_user(user2.id)
 
@@ -373,7 +375,7 @@ async def force_divorce(ctx, user1: discord.Member, user2: discord.Member):
     await ctx.send(f"📜 {user1.mention} and {user2.mention} have been force-divorced.")
 
 
-async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Member):
+async def force_adopt(ctx, parent_user: discord.User, child_user: discord.User):
     """Force an adoption relationship between two users."""
     if parent_user.id == child_user.id:
         await ctx.send("❌ A user can't adopt themselves.")
@@ -382,7 +384,8 @@ async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Memb
         await ctx.send("❌ Can't force-adopt a bot.")
         return
 
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     parent_data = DataStorage.get_or_create_user(parent_user.id)
     child_data = DataStorage.get_or_create_user(child_user.id)
 
@@ -399,9 +402,10 @@ async def force_adopt(ctx, parent_user: discord.Member, child_user: discord.Memb
     await ctx.send(f"👨‍👧 {parent_user.mention} has been made the parent of {child_user.mention}.")
 
 
-async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
+async def force_unadopt(ctx, user1: discord.User, user2: discord.User):
     """Force dissolve an adoption relationship between two users."""
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     user1_data = DataStorage.get_or_create_user(user1.id)
     user2_data = DataStorage.get_or_create_user(user2.id)
 
@@ -421,7 +425,8 @@ async def force_unadopt(ctx, user1: discord.Member, user2: discord.Member):
 
 async def admin_lottery_start(ctx, ticket_cap, duration_seconds, max_per_user):
     """Start a new lottery with the given trigger conditions."""
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
 
     if DataStorage.get_lottery_active(guild_id):
         await ctx.send("A lottery is already running! Use `.admin_lottery_cancel` to cancel it first.")
@@ -459,7 +464,8 @@ async def admin_lottery_start(ctx, ticket_cap, duration_seconds, max_per_user):
 
 async def admin_lottery_cancel(ctx):
     """Cancel the active lottery and refund all ticket buyers."""
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
 
     if not DataStorage.get_lottery_active(guild_id):
         await ctx.send("No lottery is currently running.")
@@ -489,7 +495,8 @@ async def admin_lottery_cancel(ctx):
 
 async def force_lottery_draw(ctx):
     """Draws a lottery winner immediately and resets the pool."""
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     entries = DataStorage.get_lottery_entries(guild_id)
 
     if not entries:
@@ -504,7 +511,8 @@ async def admin_lottery_add(ctx, amount: int):
     if amount <= 0:
         await ctx.send("Amount must be positive.")
         return
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     DataStorage.lottery_pot[guild_id] = DataStorage.get_lottery_pot(guild_id) + amount
     DataStorage.save_lottery()
     embed = discord.Embed(
@@ -521,7 +529,8 @@ async def admin_jackpot_set(ctx, amount: int):
     if amount < 0:
         await ctx.send("Amount must be zero or positive.")
         return
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     DataStorage.set_jackpot(guild_id, amount)
     DataStorage.save_jackpot()
     embed = discord.Embed(
@@ -532,13 +541,14 @@ async def admin_jackpot_set(ctx, amount: int):
     await ctx.send(embed=embed)
 
 
-async def admin_lottery_give(ctx, target: discord.Member, amount: int):
+async def admin_lottery_give(ctx, target: discord.User, amount: int):
     """Grant lottery tickets to a user without requiring bean payment."""
     if amount <= 0:
         await ctx.send("Amount must be positive.")
         return
 
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     user_id = str(target.id)
     DataStorage.lottery_entries.setdefault(guild_id, {})[user_id] = \
         DataStorage.get_lottery_entries(guild_id).get(user_id, 0) + amount
@@ -554,9 +564,10 @@ async def admin_lottery_give(ctx, target: discord.Member, amount: int):
     await ctx.send(embed=embed)
 
 
-async def admin_user_info(ctx, target: discord.Member):
+async def admin_user_info(ctx, target: discord.User):
     """Display a full summary of a user's saved data for the current server."""
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     user = DataStorage.get_or_create_user(target.id)
     state = user.state(guild_id)
     cap = EconomyModule.BANK_UPGRADE_TIERS[state.bank_level]
@@ -617,13 +628,14 @@ async def admin_user_info(ctx, target: discord.Member):
     await ctx.send(embed=embed)
 
 
-async def admin_tip(ctx, target: discord.Member, amount: float):
+async def admin_tip(ctx, target: discord.User, amount: float):
     """Grants a user beans without requiring the admin to have funds."""
     if amount == 0:
         await ctx.send("Amount must be greater or less than 0.")
         return
 
-    guild_id = str(ctx.guild.id)
+    invoker = DataStorage.get_or_create_user(ctx.author.id)
+    guild_id = invoker.effective_guild_id(ctx)
     target_data = DataStorage.get_or_create_user(target.id)
     target_data.ajust_beans(guild_id, amount)
     DataStorage.save_user_data()
