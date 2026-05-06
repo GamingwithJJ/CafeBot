@@ -354,6 +354,7 @@ COMMAND_MODULES = {
             ("`.cafe_status`", "Show a server-wide snapshot: beans in circulation, registered users, active marriages, and total quotes", "any"),
             ("`.slots <bet>`", "Spin a 3-reel slot machine. Minimum bet 50 beans. Triple 7s pays 230×, three of a kind pays 25×, two of a kind returns your bet. No match loses your bet", "any"),
             ("`.blackjack <bet>`", "Play blackjack against the dealer. Minimum bet 20 beans. Use the Hit and Stand buttons to play. Blackjack on deal pays 1.5×, a win pays 1×, push returns your bet", "any"),
+            ("`.hilo <bet>`", "Press-your-luck card game. A card 2–A is drawn; bet whether the next is higher or lower. Each correct guess multiplies your pot by ×1.4. Cash out anytime after the first correct guess. Wrong guess loses your bet. Min bet 50", "any"),
             ("`.lottery`", "Check the current lottery pot and your ticket count", "any"),
             ("`.lottery_buy <amount>`", "Buy lottery tickets (50 beans each, max 10 per round). More tickets = better odds. Winner takes the whole pot", "any"),
             ("`.bank`", "View your bank balance, current storage cap, and upgrade cost", "any"),
@@ -426,7 +427,6 @@ COMMAND_MODULES = {
             ("`.host_check`", "Diagnose the host machine's basic platform and architecture details", "bot_admin"),
             ("`.debug_music`", "Inspect local music-runtime dependencies like Node, FFmpeg, and cookies setup", "bot_admin"),
             ("`.debug_node`", "Test whether Node can run and report the installed yt-dlp version", "bot_admin"),
-            ("`.hilo <bet>`", "Press-your-luck card game. A card 2–A is drawn; bet whether the next is higher or lower. Each correct guess multiplies your pot by ×1.4. Cash out anytime after the first correct guess. Wrong guess loses your bet. Min bet 50", "bot_admin"),
             ("`.roulette <bet>`", "Open the Roulette bet picker. Pick a bet type from the embed buttons (Red/Black/Even/Odd/Low/High/dozens/columns) or click 🔢 Pick Number to enter a single number 0-36. Numbers pay 35:1, dozens/columns pay 2:1, outside bets pay 1:1. Min bet 25", "bot_admin")
         ]
     }
@@ -1026,7 +1026,7 @@ async def blackjack(ctx, bet: int):
 
 
 @bot.command()
-@is_authorized("bot_admin", dm_fallback=True)
+@is_authorized("any", guild_only=True, dm_fallback=True)
 async def hilo(ctx, bet: int):
     await EconomyModule.hilo(ctx, bet)
 
@@ -2128,9 +2128,9 @@ async def slash_blackjack(interaction: discord.Interaction, bet: int):
     await EconomyModule.blackjack(ctx, bet)
 
 
-@bot.tree.command(name="hilo", description="[testing] Hi-Lo card game — guess if the next card is higher or lower")
+@bot.tree.command(name="hilo", description="Hi-Lo card game — guess if the next card is higher or lower")
 async def slash_hilo(interaction: discord.Interaction, bet: int):
-    if not await slash_auth_check(interaction, "bot_admin", dm_fallback=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True, dm_fallback=True): return
     ctx = InteractionContext(interaction)
     await interaction.response.defer()
     await EconomyModule.hilo(ctx, bet)
