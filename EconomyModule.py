@@ -4,6 +4,7 @@ import asyncio
 import DataStorage
 import datetime
 import discord
+from Classes.RequestClass import Request
 
 
 #Configuration Variables
@@ -143,6 +144,284 @@ async def tip(ctx, target: discord.Member, amount: float):
     embed.add_field(name=f"{target.display_name}'s Balance", value=f"{int(target_data.get_beans(guild_id))} beans", inline=True)
 
     await ctx.send(embed=embed)
+
+
+# ============================================================================
+# Peer-to-peer betting (.bet / .betwinner / .cancelbet)
+# ============================================================================
+# Pending offers are stored as Request("bet", proposer_id, amount=N) on the
+# TARGET'S state (parity with .marry/.adopt). Once accepted, the bet moves to
+# active_bets, mirrored on both players' state and keyed by a canonical pair.
+
+def _pair_key(a_id, b_id):
+    lo, hi = sorted((int(a_id), int(b_id)))
+    return f"{lo}:{hi}"
+
+
+def _find_active_bets_for(user_obj, guild_id, user_id):
+    """Return [(pair_key, record, other_id), ...] for active bets involving user_id."""
+    out = []
+    for k, v in user_obj.state(guild_id).active_bets.items():
+        a, b = (int(x) for x in k.split(":"))
+        if a == int(user_id) or b == int(user_id):
+            other = b if a == int(user_id) else a
+            out.append((k, v, other))
+    return out
+
+
+async def bet(ctx, target: discord.Member, amount: int):
+    """Propose a peer-to-peer bet, or accept an incoming offer by matching the exact amount."""
+    author = ctx.author
+    guild_id = str(ctx.guild.id)
+
+    if target.id == author.id:
+        await ctx.send("You can't bet against yourself.")
+        return
+
+    if target.bot:
+        await ctx.send("You can't bet against a bot.")
+        return
+
+    if amount <= 0:
+        await ctx.send("Bet amount must be a positive number.")
+        return
+
+    author_data = DataStorage.get_or_create_user(author.id)
+    target_data = DataStorage.get_or_create_user(target.id)
+
+    if author_data.get_beans(guild_id) < amount:
+        embed = discord.Embed(
+            title="❌ Insufficient Beans",
+            description=f"You only have **{int(author_data.get_beans(guild_id))}** beans, but tried to bet **{int(amount)}**.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    pair = _pair_key(author.id, target.id)
+
+    # 1) Acceptance branch — is there a pending bet request from target in MY state?
+    incoming = author_data.get_request(guild_id, "bet", target.id)
+    if incoming is not None:
+        offer_amount = int(incoming.get_amount() or 0)
+        if offer_amount != amount:
+            await ctx.send(
+                f"{target.mention} offered you a bet of **{offer_amount}** beans, not **{amount}**. "
+                f"Match their amount or use `.cancelbet {target.mention}` to decline."
+            )
+            return
+        # Accept: escrow author's beans, drop the request, create active bet on both sides
+        author_data.ajust_beans(guild_id, -1 * amount)
+        author_data.remove_request_by_data(guild_id, "bet", target.id)
+        record = {"amount": amount, "votes": {}}
+        author_data.state(guild_id).active_bets[pair] = record
+        target_data.state(guild_id).active_bets[pair] = record
+        DataStorage.save_user_data()
+
+        embed = discord.Embed(
+            title="🤝 Bet Active!",
+            description=(
+                f"{author.mention} vs {target.mention} — **{amount}** beans each, "
+                f"**{2 * amount}**-bean pot.\n\n"
+                f"Both players must run `.betwinner <user>` naming the same winner to resolve. "
+                f"Disagreement nulls the bet and refunds both."
+            ),
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    # 2) Already an active bet between us?
+    if pair in author_data.state(guild_id).active_bets:
+        existing = author_data.state(guild_id).active_bets[pair]
+        await ctx.send(
+            f"You already have an active bet with {target.mention} for **{int(existing['amount'])}** beans. "
+            f"Resolve it with `.betwinner` or `.cancelbet {target.mention}` first."
+        )
+        return
+
+    # 3) Already a pending offer from me to them? (My request lives in their state.)
+    outgoing = target_data.get_request(guild_id, "bet", author.id)
+    if outgoing is not None:
+        existing_amount = int(outgoing.get_amount() or 0)
+        await ctx.send(
+            f"You've already offered {target.mention} a bet of **{existing_amount}** beans. "
+            f"Use `.cancelbet {target.mention}` to drop it before offering a new one."
+        )
+        return
+
+    # 4) New offer — escrow proposer's beans, store request on target's state
+    author_data.ajust_beans(guild_id, -1 * amount)
+    target_data.add_request(guild_id, "bet", Request("bet", author.id, amount=amount))
+    DataStorage.save_user_data()
+
+    embed = discord.Embed(
+        title="🎲 Bet Offered",
+        description=(
+            f"{author.mention} offers {target.mention} a **{amount}**-bean bet. "
+            f"Beans escrowed.\n\n"
+            f"{target.mention}: run `.bet {author.mention} {amount}` to accept, "
+            f"or `.cancelbet {author.mention}` to decline.\n"
+            f"{author.mention}: use `.cancelbet {target.mention}` to cancel and refund."
+        ),
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
+
+
+async def betwinner(ctx, winner: discord.Member, opponent: discord.Member = None):
+    """Vote on the winner of an active bet. Agreement pays the winner; disagreement nulls and refunds."""
+    invoker = ctx.author
+    guild_id = str(ctx.guild.id)
+    invoker_data = DataStorage.get_or_create_user(invoker.id)
+
+    # Resolve which active bet
+    if winner.id != invoker.id:
+        pair_key = _pair_key(invoker.id, winner.id)
+        record = invoker_data.state(guild_id).active_bets.get(pair_key)
+        if record is None:
+            await ctx.send(f"No active bet found between you and {winner.mention}.")
+            return
+        other_id = winner.id
+        winner_id = winner.id
+    else:
+        # Self-claim
+        if opponent is None:
+            active = _find_active_bets_for(invoker_data, guild_id, invoker.id)
+            if len(active) == 0:
+                await ctx.send("You have no active bets.")
+                return
+            if len(active) > 1:
+                mentions = ", ".join(f"<@{oid}>" for _, _, oid in active)
+                await ctx.send(
+                    f"You have multiple active bets (with {mentions}). "
+                    f"Use `.betwinner {invoker.mention} <opponent>` to specify which bet you won."
+                )
+                return
+            pair_key, record, other_id = active[0]
+            winner_id = invoker.id
+        else:
+            if opponent.id == invoker.id:
+                await ctx.send("Opponent can't be yourself.")
+                return
+            pair_key = _pair_key(invoker.id, opponent.id)
+            record = invoker_data.state(guild_id).active_bets.get(pair_key)
+            if record is None:
+                await ctx.send(f"No active bet found with {opponent.mention}.")
+                return
+            other_id = opponent.id
+            winner_id = invoker.id
+
+    # Already voted?
+    if str(invoker.id) in record["votes"]:
+        prior = record["votes"][str(invoker.id)]
+        await ctx.send(
+            f"You already voted in this bet (for <@{prior}>). Waiting for <@{other_id}> to vote."
+        )
+        return
+
+    # Record vote and mirror to opponent's state
+    record["votes"][str(invoker.id)] = int(winner_id)
+    other_data = DataStorage.get_or_create_user(other_id)
+    other_data.state(guild_id).active_bets[pair_key] = record
+
+    other_vote = record["votes"].get(str(other_id))
+    amount = int(record["amount"])
+    pot = 2 * amount
+
+    if other_vote is None:
+        DataStorage.save_user_data()
+        await ctx.send(
+            f"Vote recorded: <@{winner_id}> wins. Waiting for <@{other_id}> to vote with `.betwinner`."
+        )
+        return
+
+    # Both voted — resolve
+    invoker_data.state(guild_id).active_bets.pop(pair_key, None)
+    other_data.state(guild_id).active_bets.pop(pair_key, None)
+
+    if other_vote == int(winner_id):
+        winner_data = DataStorage.get_or_create_user(winner_id)
+        winner_data.ajust_beans(guild_id, pot)
+        DataStorage.save_user_data()
+        embed = discord.Embed(
+            title="🏆 Bet Resolved!",
+            description=f"<@{winner_id}> wins **{pot}** beans!",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="Winner's Balance",
+            value=f"{int(winner_data.get_beans(guild_id))} beans",
+            inline=True
+        )
+        await ctx.send(embed=embed)
+    else:
+        # Disagreement → refund both
+        a, b = (int(x) for x in pair_key.split(":"))
+        DataStorage.get_or_create_user(a).ajust_beans(guild_id, amount)
+        DataStorage.get_or_create_user(b).ajust_beans(guild_id, amount)
+        DataStorage.save_user_data()
+        embed = discord.Embed(
+            title="❌ Disagreement — Bet Nulled",
+            description=(
+                f"<@{a}> and <@{b}> couldn't agree on the winner. "
+                f"Each player refunded **{amount}** beans."
+            ),
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
+
+async def cancelbet(ctx, target: discord.Member):
+    """Cancel a pending offer, decline an incoming offer, or forfeit an active bet."""
+    invoker = ctx.author
+    guild_id = str(ctx.guild.id)
+    invoker_data = DataStorage.get_or_create_user(invoker.id)
+    target_data = DataStorage.get_or_create_user(target.id)
+
+    # 1) Cancel my outgoing offer — my Request lives in target's state.
+    outgoing = target_data.get_request(guild_id, "bet", invoker.id)
+    if outgoing is not None:
+        amount = int(outgoing.get_amount() or 0)
+        invoker_data.ajust_beans(guild_id, amount)
+        target_data.remove_request_by_data(guild_id, "bet", invoker.id)
+        DataStorage.save_user_data()
+        await ctx.send(
+            f"Cancelled your bet offer to {target.mention}. **{amount}** beans refunded."
+        )
+        return
+
+    # 2) Decline an incoming offer — their Request lives in my state.
+    incoming = invoker_data.get_request(guild_id, "bet", target.id)
+    if incoming is not None:
+        amount = int(incoming.get_amount() or 0)
+        target_data.ajust_beans(guild_id, amount)
+        invoker_data.remove_request_by_data(guild_id, "bet", target.id)
+        DataStorage.save_user_data()
+        await ctx.send(
+            f"Declined {target.mention}'s bet offer. They've been refunded **{amount}** beans."
+        )
+        return
+
+    # 3) Forfeit an active bet — opponent takes the pot.
+    pair_key = _pair_key(invoker.id, target.id)
+    record = invoker_data.state(guild_id).active_bets.get(pair_key)
+    if record is not None:
+        amount = int(record["amount"])
+        pot = 2 * amount
+        target_data.ajust_beans(guild_id, pot)
+        invoker_data.state(guild_id).active_bets.pop(pair_key, None)
+        target_data.state(guild_id).active_bets.pop(pair_key, None)
+        DataStorage.save_user_data()
+        embed = discord.Embed(
+            title="🏳️ Bet Forfeited",
+            description=f"{invoker.mention} forfeited. {target.mention} wins the **{pot}**-bean pot.",
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    await ctx.send(f"You have no pending offer or active bet with {target.mention}.")
 
 
 async def bean_top(ctx):

@@ -36,7 +36,9 @@ class GuildState:
         self.adopted_children = []          # list[int]
         self.adopted_by = []                # list[int]
         # Pending proposals — scoped to this guild
-        self.requests = {"marriage": [], "adoption": []}
+        self.requests = {"marriage": [], "adoption": [], "bet": []}
+        # Active bets (post-acceptance) — mirrored to both players' state
+        self.active_bets = {}    # {"<lo_id>:<hi_id>": {"amount": int, "votes": {str(player_id): int(winner_id)}}}
 
     def to_dict(self):
         return {
@@ -60,6 +62,13 @@ class GuildState:
             "requests": {
                 req_type: [r.to_dict() for r in req_list]
                 for req_type, req_list in self.requests.items()
+            },
+            "active_bets": {
+                k: {
+                    "amount": int(v["amount"]),
+                    "votes": {str(pid): int(wid) for pid, wid in v["votes"].items()},
+                }
+                for k, v in self.active_bets.items()
             },
         }
 
@@ -111,12 +120,24 @@ class GuildState:
             gs.adopted_by = []
 
         # requests
-        req_data = data.get("requests", {"marriage": [], "adoption": []})
-        gs.requests = {"marriage": [], "adoption": []}
+        req_data = data.get("requests", {"marriage": [], "adoption": [], "bet": []})
+        gs.requests = {"marriage": [], "adoption": [], "bet": []}
         for req_type, req_list in req_data.items():
             gs.requests.setdefault(req_type, [])
             for r in req_list:
-                gs.requests[req_type].append(Request(r.get("request_type", req_type), r.get("user_id")))
+                gs.requests[req_type].append(Request(
+                    r.get("request_type", req_type),
+                    r.get("user_id"),
+                    amount=r.get("amount"),
+                ))
+
+        # active bets
+        gs.active_bets = {}
+        for k, v in data.get("active_bets", {}).items():
+            gs.active_bets[k] = {
+                "amount": int(v.get("amount", 0)),
+                "votes": {str(pid): int(wid) for pid, wid in v.get("votes", {}).items()},
+            }
         return gs
 
 
