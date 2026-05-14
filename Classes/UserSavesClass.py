@@ -67,6 +67,7 @@ class GuildState:
                 k: {
                     "amount": int(v["amount"]),
                     "votes": {str(pid): int(wid) for pid, wid in v["votes"].items()},
+                    **({"reason": v["reason"]} if v.get("reason") else {}),
                 }
                 for k, v in self.active_bets.items()
             },
@@ -129,6 +130,7 @@ class GuildState:
                     r.get("request_type", req_type),
                     r.get("user_id"),
                     amount=r.get("amount"),
+                    reason=r.get("reason"),
                 ))
 
         # active bets
@@ -137,6 +139,7 @@ class GuildState:
             gs.active_bets[k] = {
                 "amount": int(v.get("amount", 0)),
                 "votes": {str(pid): int(wid) for pid, wid in v.get("votes", {}).items()},
+                "reason": v.get("reason"),
             }
         return gs
 

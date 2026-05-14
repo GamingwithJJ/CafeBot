@@ -170,8 +170,9 @@ def _find_active_bets_for(user_obj, guild_id, user_id):
     return out
 
 
-async def bet(ctx, target: discord.Member, amount: int):
-    """Propose a peer-to-peer bet, or accept an incoming offer by matching the exact amount."""
+async def bet(ctx, target: discord.Member, amount: int, reason: Optional[str] = None):
+    """Propose a peer-to-peer bet, or accept an incoming offer by matching the exact amount.
+    Optional `reason` is stored with the offer and surfaces in resolution/cancellation embeds."""
     author = ctx.author
     guild_id = str(ctx.guild.id)
 
@@ -211,10 +212,12 @@ async def bet(ctx, target: discord.Member, amount: int):
                 f"Match their amount or use `.cancelbet {target.mention}` to decline."
             )
             return
-        # Accept: escrow author's beans, drop the request, create active bet on both sides
+        # Accept: escrow author's beans, drop the request, create active bet on both sides.
+        # The offerer's reason carries over; an acceptor-supplied reason is ignored.
+        offer_reason = incoming.get_reason()
         author_data.ajust_beans(guild_id, -1 * amount)
         author_data.remove_request_by_data(guild_id, "bet", target.id)
-        record = {"amount": amount, "votes": {}}
+        record = {"amount": amount, "votes": {}, "reason": offer_reason}
         author_data.state(guild_id).active_bets[pair] = record
         target_data.state(guild_id).active_bets[pair] = record
         DataStorage.save_user_data()
@@ -229,6 +232,8 @@ async def bet(ctx, target: discord.Member, amount: int):
             ),
             color=discord.Color.green()
         )
+        if offer_reason:
+            embed.add_field(name="Reason", value=offer_reason, inline=False)
         await ctx.send(embed=embed)
         return
 
@@ -253,7 +258,7 @@ async def bet(ctx, target: discord.Member, amount: int):
 
     # 4) New offer — escrow proposer's beans, store request on target's state
     author_data.ajust_beans(guild_id, -1 * amount)
-    target_data.add_request(guild_id, "bet", Request("bet", author.id, amount=amount))
+    target_data.add_request(guild_id, "bet", Request("bet", author.id, amount=amount, reason=reason))
     DataStorage.save_user_data()
 
     embed = discord.Embed(
@@ -267,6 +272,8 @@ async def bet(ctx, target: discord.Member, amount: int):
         ),
         color=discord.Color.gold()
     )
+    if reason:
+        embed.add_field(name="Reason", value=reason, inline=False)
     await ctx.send(embed=embed)
 
 
@@ -338,6 +345,7 @@ async def betwinner(ctx, winner: discord.Member, opponent: discord.Member = None
         return
 
     # Both voted — resolve
+    bet_reason = record.get("reason")
     invoker_data.state(guild_id).active_bets.pop(pair_key, None)
     other_data.state(guild_id).active_bets.pop(pair_key, None)
 
@@ -355,6 +363,8 @@ async def betwinner(ctx, winner: discord.Member, opponent: discord.Member = None
             value=f"{int(winner_data.get_beans(guild_id))} beans",
             inline=True
         )
+        if bet_reason:
+            embed.add_field(name="Reason", value=bet_reason, inline=False)
         await ctx.send(embed=embed)
     else:
         # Disagreement → refund both
@@ -370,6 +380,8 @@ async def betwinner(ctx, winner: discord.Member, opponent: discord.Member = None
             ),
             color=discord.Color.red()
         )
+        if bet_reason:
+            embed.add_field(name="Reason", value=bet_reason, inline=False)
         await ctx.send(embed=embed)
 
 
@@ -463,6 +475,7 @@ async def cancelbet(ctx, target: Optional[discord.Member] = None):
     if record is not None:
         amount = int(record["amount"])
         pot = 2 * amount
+        bet_reason = record.get("reason")
         target_data.ajust_beans(guild_id, pot)
         invoker_data.state(guild_id).active_bets.pop(pair_key, None)
         target_data.state(guild_id).active_bets.pop(pair_key, None)
@@ -472,6 +485,8 @@ async def cancelbet(ctx, target: Optional[discord.Member] = None):
             description=f"{invoker.mention} forfeited. {target.mention} wins the **{pot}**-bean pot.",
             color=discord.Color.orange()
         )
+        if bet_reason:
+            embed.add_field(name="Reason", value=bet_reason, inline=False)
         await ctx.send(embed=embed)
         return
 

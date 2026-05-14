@@ -410,7 +410,10 @@ COMMAND_MODULES = {
             ("`.deposit <amount>`", "Move beans from your wallet into the bank (safe from robbers)", "any"),
             ("`.withdraw <amount>`", "Move beans from your bank back to your wallet", "any"),
             ("`.bank_upgrade`", "Spend beans to increase your bank's storage cap. Tiers: 1,000 → 2,000 → 5,000 → 10,000 → 20,000", "any"),
-            ("`.rob <@user>`", "Attempt to steal 10–25% of a user's wallet (45% success). Failure costs you 150 beans paid to the target. 60-min cooldown", "any")
+            ("`.rob <@user>`", "Attempt to steal 10–25% of a user's wallet (45% success). Failure costs you 150 beans paid to the target. 60-min cooldown", "any"),
+            ("`.bet <user> <amount> [reason]`", "Offer a peer-to-peer bet, or accept an incoming offer by matching their exact amount. Beans are escrowed immediately on both sides. Optional `reason` is shown on the offer and carries through to resolution", "any"),
+            ("`.betwinner <winner> [opponent]`", "Vote who won an active bet. Match = winner takes the pot, mismatch = bet nulls and both are refunded. Pass `opponent` only when claiming victory yourself with multiple active bets in flight", "any"),
+            ("`.cancelbet [user]`", "Cancel a pending offer (refunds you), decline an incoming offer (refunds them), or forfeit an active bet (opponent wins the pot). Omit `user` to auto-resolve when you only have one bet in flight", "any")
         ]
     },
     "Faith": {
@@ -476,10 +479,7 @@ COMMAND_MODULES = {
             ("`.host_check`", "Diagnose the host machine's basic platform and architecture details", "bot_admin"),
             ("`.debug_music`", "Inspect local music-runtime dependencies like Node, FFmpeg, and cookies setup", "bot_admin"),
             ("`.debug_node`", "Test whether Node can run and report the installed yt-dlp version", "bot_admin"),
-            ("`.roulette <bet>`", "Open the Roulette bet picker. Pick a bet type from the embed buttons (Red/Black/Even/Odd/Low/High/dozens/columns) or click 🔢 Pick Number to enter a single number 0-36. Numbers pay 35:1, dozens/columns pay 2:1, outside bets pay 1:1. Min bet 25", "bot_admin"),
-            ("`.bet <user> <amount>`", "Offer a peer-to-peer bet, or accept an incoming offer by matching their exact amount. Beans are escrowed immediately on both sides", "bot_admin"),
-            ("`.betwinner <winner> [opponent]`", "Vote who won an active bet. Match = winner takes the pot, mismatch = bet nulls and both are refunded. Pass `opponent` only when claiming victory yourself with multiple active bets in flight", "bot_admin"),
-            ("`.cancelbet [user]`", "Cancel a pending offer (refunds you), decline an incoming offer (refunds them), or forfeit an active bet (opponent wins the pot). Omit `user` to auto-resolve when you only have one bet in flight", "bot_admin")
+            ("`.roulette <bet>`", "Open the Roulette bet picker. Pick a bet type from the embed buttons (Red/Black/Even/Odd/Low/High/dozens/columns) or click 🔢 Pick Number to enter a single number 0-36. Numbers pay 35:1, dozens/columns pay 2:1, outside bets pay 1:1. Min bet 25", "bot_admin")
         ]
     }
 }
@@ -982,19 +982,19 @@ async def tip(ctx, target: FlexibleMember, amount: float):
 
 
 @bot.command()
-@is_authorized("bot_admin", guild_only=True)
-async def bet(ctx, target: FlexibleMember, amount: int):
-    await EconomyModule.bet(ctx, target, amount)
+@is_authorized("any", guild_only=True)
+async def bet(ctx, target: FlexibleMember, amount: int, *, reason: str = None):
+    await EconomyModule.bet(ctx, target, amount, reason)
 
 
 @bot.command()
-@is_authorized("bot_admin", guild_only=True)
+@is_authorized("any", guild_only=True)
 async def betwinner(ctx, winner: FlexibleMember, opponent: Optional[FlexibleMember] = None):
     await EconomyModule.betwinner(ctx, winner, opponent)
 
 
 @bot.command()
-@is_authorized("bot_admin", guild_only=True)
+@is_authorized("any", guild_only=True)
 async def cancelbet(ctx, target: Optional[FlexibleMember] = None):
     await EconomyModule.cancelbet(ctx, target)
 
@@ -2163,23 +2163,23 @@ async def slash_tip(interaction: discord.Interaction, target: discord.Member, am
     await EconomyModule.tip(ctx, target, amount)
 
 
-@bot.tree.command(name="bet", description="[testing] Offer or accept a peer-to-peer bet with another user")
-async def slash_bet(interaction: discord.Interaction, target: discord.Member, amount: int):
-    if not await slash_auth_check(interaction, "bot_admin", guild_only=True): return
+@bot.tree.command(name="bet", description="Offer or accept a peer-to-peer bet with another user")
+async def slash_bet(interaction: discord.Interaction, target: discord.Member, amount: int, reason: str = None):
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
-    await EconomyModule.bet(ctx, target, amount)
+    await EconomyModule.bet(ctx, target, amount, reason)
 
 
-@bot.tree.command(name="betwinner", description="[testing] Vote the winner of an active bet")
+@bot.tree.command(name="betwinner", description="Vote the winner of an active bet")
 async def slash_betwinner(interaction: discord.Interaction, winner: discord.Member, opponent: discord.Member = None):
-    if not await slash_auth_check(interaction, "bot_admin", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.betwinner(ctx, winner, opponent)
 
 
-@bot.tree.command(name="cancelbet", description="[testing] Cancel a pending bet offer or forfeit an active bet")
+@bot.tree.command(name="cancelbet", description="Cancel a pending bet offer or forfeit an active bet")
 async def slash_cancelbet(interaction: discord.Interaction, target: discord.Member = None):
-    if not await slash_auth_check(interaction, "bot_admin", guild_only=True): return
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.cancelbet(ctx, target)
 
