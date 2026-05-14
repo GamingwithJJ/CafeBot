@@ -61,24 +61,52 @@ config = dotenv_values(".env")
 DataStorage.administrators = config.get("administrators").split(",")
 
 
+def _match_member_by_name(guild, argument: str):
+    """Case-insensitive scan of guild.members against display_name, global_name, and name."""
+    needle = argument.lower()
+    for m in guild.members:
+        if m.display_name.lower() == needle:
+            return m
+        global_name = getattr(m, "global_name", None)
+        if global_name and global_name.lower() == needle:
+            return m
+        if m.name.lower() == needle:
+            return m
+    return None
+
+
 class FlexibleMember(commands.MemberConverter):
     """MemberConverter with a case-insensitive display_name / global_name / username fallback.
-    discord.py's default get_member_named is case-sensitive — this lets `.cancelbet jon` match "Jon" or a "Jon" nickname."""
+    discord.py's default get_member_named is case-sensitive — this lets `.kick jon` match "Jon" or a "Jon" nickname."""
     async def convert(self, ctx, argument):
         try:
             return await super().convert(ctx, argument)
         except commands.MemberNotFound:
             if ctx.guild is None:
                 raise
-            needle = argument.lower()
-            for m in ctx.guild.members:
-                if m.display_name.lower() == needle:
-                    return m
-                global_name = getattr(m, "global_name", None)
-                if global_name and global_name.lower() == needle:
-                    return m
-                if m.name.lower() == needle:
-                    return m
+            match = _match_member_by_name(ctx.guild, argument)
+            if match is not None:
+                return match
+            raise
+
+
+class FlexibleUser(commands.UserConverter):
+    """UserConverter with case-insensitive display_name fallback.
+    In DM, scans the invoker's default DM guild so bot-admin commands like `.force_marry Jon Jane` work by nickname."""
+    async def convert(self, ctx, argument):
+        try:
+            return await super().convert(ctx, argument)
+        except commands.UserNotFound:
+            search_guild = ctx.guild
+            if search_guild is None:
+                invoker_record = DataStorage.get_or_create_user(ctx.author.id)
+                target_gid = invoker_record.default_dm_guild_id
+                if target_gid:
+                    search_guild = ctx.bot.get_guild(int(target_gid))
+            if search_guild is not None:
+                match = _match_member_by_name(search_guild, argument)
+                if match is not None:
+                    return match
             raise
 
 
@@ -540,13 +568,13 @@ async def lockdown(ctx, state: bool = True, all_channels: bool = False):
 
 @bot.command()
 @is_authorized("kick")
-async def kick(ctx, member: discord.Member, reason="No reason provided"):
+async def kick(ctx, member: FlexibleMember, reason="No reason provided"):
     await ModerationModule.kick_user(ctx, member, reason)
 
 
 @bot.command()
 @is_authorized("ban")
-async def ban(ctx, member: discord.Member, reason="No reason provided"):
+async def ban(ctx, member: FlexibleMember, reason="No reason provided"):
     await ModerationModule.ban_user(ctx, member, reason)
 
 
@@ -564,37 +592,37 @@ async def slowmode(ctx, boolean: bool = True, seconds: int = 500):
 
 @bot.command()
 @is_authorized("server_admin")
-async def mute(ctx, member: discord.Member, minutes: int = 10, *, reason="No reason given"):
+async def mute(ctx, member: FlexibleMember, minutes: int = 10, *, reason="No reason given"):
     await ModerationModule.timeout_user(ctx, member, minutes, reason)
 
 
 @bot.command()
 @is_authorized("server_admin")
-async def unmute(ctx, member: discord.Member):
+async def unmute(ctx, member: FlexibleMember):
     await ModerationModule.remove_timeout(ctx, member)
 
 
 @bot.command()
 @is_authorized("server_admin")
-async def softban(ctx, member: discord.Member, amount_of_days: int = 1, reason="No reason given"):
+async def softban(ctx, member: FlexibleMember, amount_of_days: int = 1, reason="No reason given"):
     await ModerationModule.softban_user(ctx, member, amount_of_days, reason)
 
 
 @bot.command()
 @is_authorized("server_admin")
-async def whois(ctx, member: discord.Member):
+async def whois(ctx, member: FlexibleMember):
     await ModerationModule.whois(ctx, member)
 
 
 @bot.command()
 @is_authorized("moderator")
-async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided"):
+async def warn(ctx, member: FlexibleMember, *, reason: str = "No reason provided"):
     await ModerationModule.warn_user(ctx, member, reason)
 
 
 @bot.command()
 @is_authorized("moderator")
-async def warnings(ctx, member: discord.Member):
+async def warnings(ctx, member: FlexibleMember):
     await ModerationModule.view_warnings(ctx, member)
 
 
@@ -636,25 +664,25 @@ async def character_delete(ctx, *, name: str):
 
 @bot.command()
 @is_authorized("any", guild_only=True)
-async def marry(ctx, target_user: discord.Member):
+async def marry(ctx, target_user: FlexibleMember):
     await FunModule.marry(ctx, target_user)
 
 
 @bot.command()
 @is_authorized("any", guild_only=True)
-async def divorce(ctx, target_user: discord.Member):
+async def divorce(ctx, target_user: FlexibleMember):
     await FunModule.divorce(ctx, target_user)
 
 
 @bot.command()
 @is_authorized("any", guild_only=True)
-async def adopt(ctx, target_user: discord.Member):
+async def adopt(ctx, target_user: FlexibleMember):
     await FunModule.adopt(ctx, target_user)
 
 
 @bot.command()
 @is_authorized("any", guild_only=True)
-async def unadopt(ctx, target_user: discord.Member):
+async def unadopt(ctx, target_user: FlexibleMember):
     await FunModule.unadopt(ctx, target_user)
 
 
@@ -666,13 +694,13 @@ async def family(ctx):
 
 @bot.command()
 @is_authorized("bot_admin")
-async def family_tree(ctx, member: discord.Member = None):
+async def family_tree(ctx, member: FlexibleMember = None):
     await FunModule.family_tree(ctx, member)
 
 
 @bot.command()
 @is_authorized("any")
-async def duel(ctx, target: discord.Member):
+async def duel(ctx, target: FlexibleMember):
     await FunModule.duel(ctx, target)
 
 
@@ -720,31 +748,31 @@ async def remove_gif_message(ctx, type: str, *, message: str):
 
 @bot.command()
 @is_authorized("any")
-async def punch(ctx, target: discord.Member = None):
+async def punch(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "punch", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def kill(ctx, target: discord.Member = None):
+async def kill(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "kill", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def slap(ctx, target: discord.Member = None):
+async def slap(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "slap", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def tickle(ctx, target: discord.Member = None):
+async def tickle(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "tickle", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def wave(ctx, target: discord.Member = None):
+async def wave(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "wave", target)
 
 
@@ -762,13 +790,13 @@ async def cry(ctx):
 
 @bot.command(aliases=["smooch"])
 @is_authorized("any")
-async def kiss(ctx, target: discord.Member = None):
+async def kiss(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "kiss", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def hug(ctx, target: discord.Member = None):
+async def hug(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "hug", target)
 
 
@@ -781,7 +809,7 @@ async def sip(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def spill(ctx, target: discord.Member = None):
+async def spill(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "spill", target)
 
 
@@ -793,37 +821,37 @@ async def shocked(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def pat(ctx, target: discord.Member = None):
+async def pat(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "pat", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def cuddle(ctx, target: discord.Member = None):
+async def cuddle(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "cuddle", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def cheer(ctx, target: discord.Member = None):
+async def cheer(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "cheer", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def bonk(ctx, target: discord.Member = None):
+async def bonk(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "bonk", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def bite(ctx, target: discord.Member = None):
+async def bite(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "bite", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def stare(ctx, target: discord.Member = None):
+async def stare(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "stare", target)
 
 
@@ -841,7 +869,7 @@ async def sleep(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def purge(ctx, target: discord.Member = None):
+async def purge(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "purge", target)
 
 
@@ -853,43 +881,43 @@ async def stub_toe(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def grip(ctx, target: discord.Member = None):
+async def grip(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "grip", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def throw(ctx, target: discord.Member = None):
+async def throw(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "throw", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def wink(ctx, target: discord.Member = None):
+async def wink(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "wink", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def salute(ctx, target: discord.Member = None):
+async def salute(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "salute", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def snap(ctx, target: discord.Member = None):
+async def snap(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "snap", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def mock(ctx, target: discord.Member = None):
+async def mock(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "mock", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def yoink(ctx, target: discord.Member = None):
+async def yoink(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "yoink", target)
 
 
@@ -901,13 +929,13 @@ async def popcorn(ctx):
 
 @bot.command()
 @is_authorized("any")
-async def frog(ctx, target: discord.Member = None):
+async def frog(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "frog", target)
 
 
 @bot.command()
 @is_authorized("any")
-async def thanks(ctx, target: discord.Member = None):
+async def thanks(ctx, target: FlexibleMember = None):
     await FunModule.gif(ctx, "thanks", target)
 
 
@@ -949,7 +977,7 @@ async def beans(ctx):
 
 @bot.command()
 @is_authorized("any", guild_only=True)
-async def tip(ctx, target: discord.Member, amount: float):
+async def tip(ctx, target: FlexibleMember, amount: float):
     await EconomyModule.tip(ctx, target, amount)
 
 
@@ -1125,7 +1153,7 @@ async def bank_upgrade(ctx):
 
 @bot.command()
 @is_authorized("any", guild_only=True)
-async def rob(ctx, target: discord.Member):
+async def rob(ctx, target: FlexibleMember):
     await EconomyModule.rob(ctx, target)
 
 
@@ -1282,7 +1310,7 @@ async def remove_trivia(ctx, category: str, *args):
 
 @bot.command()
 @is_authorized("bot_admin", dm_fallback=True)
-async def admin_tip(ctx, target: discord.User, amount: float):
+async def admin_tip(ctx, target: FlexibleUser, amount: float):
     """
     Usage: .admin_tip @user <amount>
     Grants beans to a user without requiring the admin to have funds.
@@ -1334,7 +1362,7 @@ async def admin_jackpot_set(ctx, amount: int):
 
 @bot.command()
 @is_authorized("bot_admin", dm_fallback=True)
-async def admin_lottery_give(ctx, target: discord.User, amount: int):
+async def admin_lottery_give(ctx, target: FlexibleUser, amount: int):
     await BotAdminModule.admin_lottery_give(ctx, target, amount)
 
 
@@ -1346,31 +1374,31 @@ async def force_lottery_draw(ctx):
 
 @bot.command()
 @is_authorized("bot_admin", dm_fallback=True)
-async def force_marry(ctx, user1: discord.User, user2: discord.User):
+async def force_marry(ctx, user1: FlexibleUser, user2: FlexibleUser):
     await BotAdminModule.force_marry(ctx, user1, user2)
 
 
 @bot.command()
 @is_authorized("bot_admin", dm_fallback=True)
-async def force_divorce(ctx, user1: discord.User, user2: discord.User):
+async def force_divorce(ctx, user1: FlexibleUser, user2: FlexibleUser):
     await BotAdminModule.force_divorce(ctx, user1, user2)
 
 
 @bot.command()
 @is_authorized("bot_admin", dm_fallback=True)
-async def force_adopt(ctx, parent_user: discord.User, child_user: discord.User):
+async def force_adopt(ctx, parent_user: FlexibleUser, child_user: FlexibleUser):
     await BotAdminModule.force_adopt(ctx, parent_user, child_user)
 
 
 @bot.command()
 @is_authorized("bot_admin", dm_fallback=True)
-async def force_unadopt(ctx, user1: discord.User, user2: discord.User):
+async def force_unadopt(ctx, user1: FlexibleUser, user2: FlexibleUser):
     await BotAdminModule.force_unadopt(ctx, user1, user2)
 
 
 @bot.command()
 @is_authorized("bot_admin", dm_fallback=True)
-async def admin_user_info(ctx, target: discord.User):
+async def admin_user_info(ctx, target: FlexibleUser):
     await BotAdminModule.admin_user_info(ctx, target)
 
 
