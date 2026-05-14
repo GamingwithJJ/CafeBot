@@ -61,6 +61,27 @@ config = dotenv_values(".env")
 DataStorage.administrators = config.get("administrators").split(",")
 
 
+class FlexibleMember(commands.MemberConverter):
+    """MemberConverter with a case-insensitive display_name / global_name / username fallback.
+    discord.py's default get_member_named is case-sensitive — this lets `.cancelbet jon` match "Jon" or a "Jon" nickname."""
+    async def convert(self, ctx, argument):
+        try:
+            return await super().convert(ctx, argument)
+        except commands.MemberNotFound:
+            if ctx.guild is None:
+                raise
+            needle = argument.lower()
+            for m in ctx.guild.members:
+                if m.display_name.lower() == needle:
+                    return m
+                global_name = getattr(m, "global_name", None)
+                if global_name and global_name.lower() == needle:
+                    return m
+                if m.name.lower() == needle:
+                    return m
+            raise
+
+
 _DM_REJECT_MESSAGE = "⚠️ This command must be used in a server, not a DM."
 _DM_FALLBACK_UNSET_MESSAGE = "⚠️ Set a default server first with `.dm_server` to use this command in DMs."
 _DM_FALLBACK_STALE_MESSAGE = "⚠️ Your DM default server is no longer valid. Run `.dm_server` to pick a new one."
@@ -430,7 +451,7 @@ COMMAND_MODULES = {
             ("`.roulette <bet>`", "Open the Roulette bet picker. Pick a bet type from the embed buttons (Red/Black/Even/Odd/Low/High/dozens/columns) or click 🔢 Pick Number to enter a single number 0-36. Numbers pay 35:1, dozens/columns pay 2:1, outside bets pay 1:1. Min bet 25", "bot_admin"),
             ("`.bet <user> <amount>`", "Offer a peer-to-peer bet, or accept an incoming offer by matching their exact amount. Beans are escrowed immediately on both sides", "bot_admin"),
             ("`.betwinner <winner> [opponent]`", "Vote who won an active bet. Match = winner takes the pot, mismatch = bet nulls and both are refunded. Pass `opponent` only when claiming victory yourself with multiple active bets in flight", "bot_admin"),
-            ("`.cancelbet <user>`", "Cancel a pending offer (refunds you), decline an incoming offer (refunds them), or forfeit an active bet (opponent wins the pot)", "bot_admin")
+            ("`.cancelbet [user]`", "Cancel a pending offer (refunds you), decline an incoming offer (refunds them), or forfeit an active bet (opponent wins the pot). Omit `user` to auto-resolve when you only have one bet in flight", "bot_admin")
         ]
     }
 }
@@ -934,19 +955,19 @@ async def tip(ctx, target: discord.Member, amount: float):
 
 @bot.command()
 @is_authorized("bot_admin", guild_only=True)
-async def bet(ctx, target: discord.Member, amount: int):
+async def bet(ctx, target: FlexibleMember, amount: int):
     await EconomyModule.bet(ctx, target, amount)
 
 
 @bot.command()
 @is_authorized("bot_admin", guild_only=True)
-async def betwinner(ctx, winner: discord.Member, opponent: discord.Member = None):
+async def betwinner(ctx, winner: FlexibleMember, opponent: Optional[FlexibleMember] = None):
     await EconomyModule.betwinner(ctx, winner, opponent)
 
 
 @bot.command()
 @is_authorized("bot_admin", guild_only=True)
-async def cancelbet(ctx, target: discord.Member):
+async def cancelbet(ctx, target: Optional[FlexibleMember] = None):
     await EconomyModule.cancelbet(ctx, target)
 
 
@@ -2129,7 +2150,7 @@ async def slash_betwinner(interaction: discord.Interaction, winner: discord.Memb
 
 
 @bot.tree.command(name="cancelbet", description="[testing] Cancel a pending bet offer or forfeit an active bet")
-async def slash_cancelbet(interaction: discord.Interaction, target: discord.Member):
+async def slash_cancelbet(interaction: discord.Interaction, target: discord.Member = None):
     if not await slash_auth_check(interaction, "bot_admin", guild_only=True): return
     ctx = InteractionContext(interaction)
     await EconomyModule.cancelbet(ctx, target)

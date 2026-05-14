@@ -1,5 +1,6 @@
 import random
 import asyncio
+from typing import Optional
 
 import DataStorage
 import datetime
@@ -372,10 +373,63 @@ async def betwinner(ctx, winner: discord.Member, opponent: discord.Member = None
         await ctx.send(embed=embed)
 
 
-async def cancelbet(ctx, target: discord.Member):
-    """Cancel a pending offer, decline an incoming offer, or forfeit an active bet."""
+def _find_bet_counterparties(invoker_id, guild_id):
+    """Return a set of other-user ids that the invoker has any pending offer or active bet with."""
+    invoker_data = DataStorage.get_or_create_user(invoker_id)
+    others = set()
+
+    # Active bets — mirrored on invoker's state
+    for _, _, other_id in _find_active_bets_for(invoker_data, guild_id, invoker_id):
+        others.add(int(other_id))
+
+    # Incoming offers — live on invoker's state
+    for req in invoker_data.state(guild_id).requests.get("bet", []):
+        others.add(int(req.get_user()))
+
+    # Outgoing offers — invoker's request lives on each target's state; scan all users.
+    for uid, u in DataStorage.user_data.items():
+        if int(uid) == int(invoker_id):
+            continue
+        if u.get_request(guild_id, "bet", invoker_id) is not None:
+            others.add(int(uid))
+
+    return others
+
+
+async def cancelbet(ctx, target: Optional[discord.Member] = None):
+    """Cancel a pending offer, decline an incoming offer, or forfeit an active bet.
+    With no target, auto-resolves when the invoker has exactly one bet relationship."""
     invoker = ctx.author
     guild_id = str(ctx.guild.id)
+
+    # Auto-detect if no target given
+    if target is None:
+        others = _find_bet_counterparties(invoker.id, guild_id)
+        if len(others) == 0:
+            await ctx.send("You have no pending bet offers or active bets.")
+            return
+        if len(others) > 1:
+            mentions = ", ".join(f"<@{oid}>" for oid in others)
+            await ctx.send(
+                f"You have bets with multiple users ({mentions}). "
+                f"Specify which one: `.cancelbet <user>`."
+            )
+            return
+        only_id = next(iter(others))
+        if ctx.guild is not None:
+            resolved = ctx.guild.get_member(only_id)
+        else:
+            resolved = None
+        if resolved is None:
+            try:
+                resolved = await ctx.bot.fetch_user(only_id)
+            except discord.HTTPException:
+                resolved = None
+        if resolved is None:
+            await ctx.send("Couldn't resolve the other player. Use `.cancelbet <user>` to specify.")
+            return
+        target = resolved
+
     invoker_data = DataStorage.get_or_create_user(invoker.id)
     target_data = DataStorage.get_or_create_user(target.id)
 
