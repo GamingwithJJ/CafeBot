@@ -447,6 +447,7 @@ COMMAND_MODULES = {
         "description": "Bot configuration and database management.",
         "emoji": "⚙️",
         "commands": [
+            ("`.smite [user]`", "Strike a target (or no one) with divine judgement. Admin-only emote", "bot_admin"),
             ("`.add_gif <type> <link>`", "Add a new GIF URL to a specific emote category (e.g. `punch`, `hug`)", "bot_admin"),
             ("`.remove_gif <type> <link>`", "Remove a GIF URL from an emote category by its exact link", "bot_admin"),
             ("`.add_gif_message <type> <message>`", "Add a new message template to an emote category. Use `{author}` and `{target}` as placeholders", "bot_admin"),
@@ -943,6 +944,12 @@ async def thanks(ctx, target: FlexibleMember = None):
 @is_authorized("any")
 async def absolutecinema(ctx):
     await FunModule.gif(ctx, "absolutecinema")
+
+
+@bot.command()
+@is_authorized("bot_admin")
+async def smite(ctx, target: FlexibleMember = None):
+    await FunModule.gif(ctx, "smite", target)
 
 
 @bot.command()
