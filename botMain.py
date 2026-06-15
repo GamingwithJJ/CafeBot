@@ -480,7 +480,8 @@ COMMAND_MODULES = {
             ("`.host_check`", "Diagnose the host machine's basic platform and architecture details", "bot_admin"),
             ("`.debug_music`", "Inspect local music-runtime dependencies like Node, FFmpeg, and cookies setup", "bot_admin"),
             ("`.debug_node`", "Test whether Node can run and report the installed yt-dlp version", "bot_admin"),
-            ("`.roulette <bet>`", "Open the Roulette bet picker. Pick a bet type from the embed buttons (Red/Black/Even/Odd/Low/High/dozens/columns) or click 🔢 Pick Number to enter a single number 0-36. Numbers pay 35:1, dozens/columns pay 2:1, outside bets pay 1:1. Min bet 25", "bot_admin")
+            ("`.roulette <bet>`", "Open the Roulette bet picker. Pick a bet type from the embed buttons (Red/Black/Even/Odd/Low/High/dozens/columns) or click 🔢 Pick Number to enter a single number 0-36. Numbers pay 35:1, dozens/columns pay 2:1, outside bets pay 1:1. Min bet 25", "bot_admin"),
+            ("`.trivia_review`", "Replay gray-zone trivia guesses one at a time and label each ✅ correct / ❌ incorrect / ⏭ skip to build the matcher training set", "bot_admin"),
         ]
     }
 }
@@ -1286,6 +1287,12 @@ async def trivia_stats(ctx):
     await TriviaModule.trivia_stats(ctx, user_data)
 
 
+@bot.command(name="trivia_review")
+@is_authorized("bot_admin")
+async def trivia_review(ctx):
+    await TriviaModule.review(ctx)
+
+
 @bot.command()
 @is_authorized("bot_admin")
 async def add_trivia(ctx, category: str, sub_category: str, question: str, *, answers: str):
@@ -1904,6 +1911,15 @@ async def slash_trivia_stats(interaction: discord.Interaction):
     user_data = DataStorage.get_or_create_user(interaction.user.id)
     ctx = InteractionContext(interaction)
     await TriviaModule.trivia_stats(ctx, user_data)
+
+
+@bot.tree.command(name="trivia_review", description="[testing] Label gray-zone trivia guesses to train the matcher")
+async def slash_trivia_review(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "bot_admin"): return
+    ctx = InteractionContext(interaction)
+    await interaction.response.defer()
+    ctx._responded = True  # already deferred; all sends must go through followup
+    await TriviaModule.review(ctx)
 
 
 @bot.tree.command(name="dm_server", description="Pick which server your DM-invoked commands route to")

@@ -1,63 +1,19 @@
 import discord
 import asyncio
 import random
-import re
-import difflib
 import DataStorage
+import TriviaMatching
 
 
-_STRIP_WORDS = {"the", "a", "an", "of", "and", "in", "on", "at", "to", "for"}
-
-def _normalize(s: str) -> str:
-    s = s.lower()
-    s = re.sub(r"[^\w\s]", "", s)
-    words = [w for w in s.split() if w not in _STRIP_WORDS]
-    return " ".join(words)
-
-
-def is_correct_answer(msg_content: str, acceptable_answers: list) -> bool:
-    normalized_msg = _normalize(msg_content)
-    msg_words = normalized_msg.split()
-    msg_word_set = set(msg_words)
-
-    for answer in acceptable_answers:
-        norm_answer = _normalize(answer)
-        if not norm_answer:
-            continue
-        answer_words = norm_answer.split()
-        window_size = len(answer_words)
-
-        # Single-word answer: whole-word token match (prevents "6" matching "16")
-        # Multi-word answer: phrase substring match
-        if window_size == 1:
-            if norm_answer in msg_words:
-                return True
-        else:
-            if norm_answer in normalized_msg:
-                return True
-
-        # Order-independent match for safe-length multi-word answers
-        if 2 <= window_size <= 5 and all(len(w) >= 4 for w in answer_words):
-            if set(answer_words).issubset(msg_word_set):
-                return True
-
-        # Fuzzy match — skip for purely numeric answers (years, counts, etc.)
-        is_numeric = norm_answer.replace(" ", "").isdigit()
-        answer_len = len(norm_answer)
-        if answer_len >= 4 and not is_numeric:
-            if answer_len <= 6:
-                threshold = 0.90
-            elif answer_len <= 12:
-                threshold = 0.85
-            else:
-                threshold = 0.82
-            for i in range(max(1, len(msg_words) - window_size + 1)):
-                window = " ".join(msg_words[i : i + window_size])
-                ratio = difflib.SequenceMatcher(None, norm_answer, window).ratio()
-                if ratio >= threshold:
-                    return True
-
-    return False
+def grade(guess: str, answers: list, ctx, question: str) -> bool:
+    """
+    Thin grading helper: delegates to TriviaMatching.verdict, fires the
+    gray-zone logger for borderline guesses, and returns the boolean result.
+    """
+    result = TriviaMatching.verdict(guess, answers)
+    guild_id = str(ctx.guild.id) if ctx.guild else ""
+    TriviaMatching.log_gray(guild_id, question, answers, guess, result)
+    return result["correct"]
 
 
 def get_question_timeout(question_text: str, acceptable_answers: list) -> int:
@@ -190,7 +146,7 @@ async def start_session(ctx, rounds: int, user_data):
                         raise asyncio.TimeoutError
                     msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
 
-                    if is_correct_answer(msg.content, acceptable_answers):
+                    if grade(msg.content, acceptable_answers, ctx, question_text):
                         official_answer = acceptable_answers[0].capitalize()
                         await ctx.send(
                             f"✅ **{msg.author.display_name}** got it right! The answer was: {official_answer}")
@@ -307,7 +263,7 @@ async def quick_trivia(ctx, user_data, category: str = None):
             if remaining <= 0:
                 raise asyncio.TimeoutError
             msg = await ctx.bot.wait_for('message', timeout=remaining, check=check)
-            if is_correct_answer(msg.content, acceptable_answers):
+            if grade(msg.content, acceptable_answers, ctx, question_text):
                 official_answer = acceptable_answers[0].capitalize()
                 winner_data = DataStorage.get_or_create_user(msg.author.id)
                 guild_id = winner_data.effective_guild_id(ctx)
@@ -340,3 +296,198 @@ async def trivia_stats(ctx, user_data):
     embed.add_field(name="📂 Enabled Categories", value=cats_str, inline=False)
     embed.set_footer(text="Use .trivia_config to change your categories")
     await ctx.send(embed=embed)
+
+
+# ---------------------------------------------------------------------------
+# .trivia_review — bot_admin labeling command
+# ---------------------------------------------------------------------------
+
+_REVIEW_QUEUE_CAP = 25  # max entries served per session
+
+
+def _build_review_queue() -> list:
+    """
+    Read the graylog, filter out already-labeled entries, then return a randomly
+    interleaved queue of at most _REVIEW_QUEUE_CAP items with a roughly equal mix
+    of accepted-gray (verdict==True) and rejected-gray (verdict==False).
+
+    Identity key for "already labeled": (question, guess, tuple(sorted(answers))).
+    """
+    all_entries = TriviaMatching.load_graylog()
+    labeled_rows = TriviaMatching.load_labels()
+
+    labeled_keys = set()
+    for row in labeled_rows:
+        try:
+            key = (row["question"], row["guess"], tuple(sorted(row["answers"])))
+            labeled_keys.add(key)
+        except (KeyError, TypeError):
+            pass
+
+    unlabeled = []
+    for entry in all_entries:
+        try:
+            key = (entry["question"], entry["guess"], tuple(sorted(entry["answers"])))
+        except (KeyError, TypeError):
+            continue
+        if key not in labeled_keys:
+            unlabeled.append(entry)
+
+    accepted = [e for e in unlabeled if e.get("verdict") is True]
+    rejected = [e for e in unlabeled if e.get("verdict") is False]
+
+    random.shuffle(accepted)
+    random.shuffle(rejected)
+
+    # Interleave accepted and rejected to keep the queue balanced.
+    interleaved = []
+    a_idx = r_idx = 0
+    while len(interleaved) < _REVIEW_QUEUE_CAP and (a_idx < len(accepted) or r_idx < len(rejected)):
+        if a_idx < len(accepted):
+            interleaved.append(accepted[a_idx])
+            a_idx += 1
+        if len(interleaved) < _REVIEW_QUEUE_CAP and r_idx < len(rejected):
+            interleaved.append(rejected[r_idx])
+            r_idx += 1
+
+    return interleaved
+
+
+def _make_review_embed(entry: dict, index: int, total: int) -> discord.Embed:
+    """Build the embed for a single review entry."""
+    verdict_label = "Accepted (bot said CORRECT)" if entry.get("verdict") else "Rejected (bot said INCORRECT)"
+    verdict_color = discord.Color.green() if entry.get("verdict") else discord.Color.red()
+
+    answers_str = ", ".join(entry.get("answers", []))
+    score = entry.get("features", {}).get("char_ratio", "?")
+    if isinstance(score, float):
+        score = f"{score:.3f}"
+
+    embed = discord.Embed(
+        title=f"Gray-Zone Review ({index}/{total})",
+        color=verdict_color
+    )
+    embed.add_field(name="Question", value=entry.get("question", "?"), inline=False)
+    embed.add_field(name="Correct Answers", value=answers_str or "?", inline=False)
+    embed.add_field(name="Player Guess", value=f'`{entry.get("guess", "?")}`', inline=True)
+    embed.add_field(name="Bot Decision", value=verdict_label, inline=True)
+    embed.add_field(name="Score", value=score, inline=True)
+    embed.set_footer(text="React: ✅ correct  ❌ incorrect  ⏭ skip")
+    return embed
+
+
+class TriviaReviewView(discord.ui.View):
+    """
+    Interactive review view for gray-zone trivia entries.
+    Only the invoking bot admin may click.
+    Mirrors the on_timeout pattern from QuickTriviaView.
+    """
+
+    def __init__(self, ctx, queue: list):
+        super().__init__(timeout=120)
+        self.ctx = ctx
+        self.queue = queue
+        self.index = 0          # current position in queue
+        self.labeled_count = 0
+        self.skipped_count = 0
+        self.message = None
+
+    # ------------------------------------------------------------------
+    # Guard: only the invoking admin may interact
+    # ------------------------------------------------------------------
+
+    async def _auth_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message(
+                "Only the admin who invoked this command can label entries.", ephemeral=True
+            )
+            return False
+        return True
+
+    # ------------------------------------------------------------------
+    # Navigation helpers
+    # ------------------------------------------------------------------
+
+    def _current_entry(self):
+        return self.queue[self.index]
+
+    async def _advance(self, interaction: discord.Interaction):
+        """Move to the next entry or finish the session."""
+        self.index += 1
+        if self.index >= len(self.queue):
+            await self._finish(interaction)
+        else:
+            embed = _make_review_embed(self._current_entry(), self.index + 1, len(self.queue))
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _finish(self, interaction: discord.Interaction):
+        """Disable buttons and show a summary."""
+        for item in self.children:
+            item.disabled = True
+        summary = discord.Embed(
+            title="Review Complete",
+            description=(
+                f"Session finished!\n"
+                f"Labeled: **{self.labeled_count}**\n"
+                f"Skipped: **{self.skipped_count}**\n"
+                f"Queue exhausted."
+            ),
+            color=discord.Color.gold()
+        )
+        await interaction.response.edit_message(embed=summary, view=self)
+
+    # ------------------------------------------------------------------
+    # Buttons
+    # ------------------------------------------------------------------
+
+    @discord.ui.button(label="✅ Correct", style=discord.ButtonStyle.green)
+    async def mark_correct(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._auth_check(interaction):
+            return
+        TriviaMatching.append_label(self._current_entry(), "correct")
+        self.labeled_count += 1
+        await self._advance(interaction)
+
+    @discord.ui.button(label="❌ Incorrect", style=discord.ButtonStyle.red)
+    async def mark_incorrect(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._auth_check(interaction):
+            return
+        TriviaMatching.append_label(self._current_entry(), "incorrect")
+        self.labeled_count += 1
+        await self._advance(interaction)
+
+    @discord.ui.button(label="⏭ Skip", style=discord.ButtonStyle.secondary)
+    async def skip_entry(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._auth_check(interaction):
+            return
+        self.skipped_count += 1
+        await self._advance(interaction)
+
+    # ------------------------------------------------------------------
+    # Timeout — mirror QuickTriviaView
+    # ------------------------------------------------------------------
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.DiscordException:
+                pass
+
+
+async def review(ctx):
+    """
+    bot_admin command: replay unlabeled gray-zone entries one at a time.
+    DM-friendly (no guild_only restriction) — the graylog is global.
+    """
+    queue = _build_review_queue()
+    if not queue:
+        await ctx.send("No unlabeled gray-zone entries found. Play some trivia first to populate the log!")
+        return
+
+    embed = _make_review_embed(queue[0], 1, len(queue))
+    view = TriviaReviewView(ctx, queue)
+    result = await ctx.send(embed=embed, view=view)
+    view.message = result

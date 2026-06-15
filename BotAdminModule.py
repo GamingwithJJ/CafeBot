@@ -89,9 +89,9 @@ async def add_gif_message(ctx, type: str, message: str):
     """Adds a new message template to a gif emote category."""
     type = type.lower()
 
-    if type not in DataStorage.gif_messages:
-        await ctx.send(f"❌ No gif category named `{type}` found.")
-        return
+    new_category = type not in DataStorage.gif_messages
+    if new_category:
+        DataStorage.gif_messages[type] = []
 
     if message in DataStorage.gif_messages[type]:
         await ctx.send("That message already exists for this category.")
@@ -99,7 +99,10 @@ async def add_gif_message(ctx, type: str, message: str):
 
     DataStorage.gif_messages[type].append(message)
     DataStorage.save_gif_messages()
-    await ctx.send(f"✅ Added message to `{type}`.")
+    if new_category:
+        await ctx.send(f"✅ Created new category `{type}` and added the message.")
+    else:
+        await ctx.send(f"✅ Added message to `{type}`.")
 
 
 async def remove_gif_message(ctx, type: str, message: str):

@@ -1,0 +1,4 @@
+# Dev-only. Never install on the bot host.
+scikit-learn
+numpy
+rapidfuzz

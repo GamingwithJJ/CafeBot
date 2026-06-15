@@ -1,0 +1,255 @@
+{"guess": "pokemon", "answers": ["pokémon"], "expected": true, "note": "diacritics: é→e"}
+{"guess": "pokémon", "answers": ["pokémon"], "expected": true, "note": "diacritics exact with accent"}
+{"guess": "naive", "answers": ["naïve"], "expected": true, "note": "diacritics: ï→i"}
+{"guess": "resume", "answers": ["résumé"], "expected": true, "note": "diacritics: é fold"}
+{"guess": "cafe", "answers": ["café"], "expected": true, "note": "diacritics: é fold short"}
+{"guess": "cliche", "answers": ["cliché"], "expected": true, "note": "diacritics: é fold mid"}
+{"guess": "world war 2", "answers": ["world war ii"], "expected": true, "note": "Roman numeral ii→2"}
+{"guess": "world war two", "answers": ["world war ii"], "expected": true, "note": "number word two→2 then matches ii"}
+{"guess": "world war ii", "answers": ["world war ii"], "expected": true, "note": "Roman numeral exact"}
+{"guess": "2", "answers": ["ii"], "expected": true, "note": "digit vs Roman short"}
+{"guess": "xi", "answers": ["11"], "expected": true, "note": "Roman xi→11"}
+{"guess": "11", "answers": ["xi"], "expected": true, "note": "digit vs stored Roman xi"}
+{"guess": "iii", "answers": ["3"], "expected": true, "note": "Roman iii→3"}
+{"guess": "3", "answers": ["iii"], "expected": true, "note": "digit 3 vs stored Roman iii"}
+{"guess": "iv", "answers": ["4"], "expected": true, "note": "Roman iv→4"}
+{"guess": "louis xiv", "answers": ["louis xiv"], "expected": true, "note": "Roman numeral in name exact"}
+{"guess": "louis 14", "answers": ["louis xiv"], "expected": true, "note": "digit 14 vs Roman xiv in name"}
+{"guess": "henry viii", "answers": ["henry viii"], "expected": true, "note": "Roman viii in name exact"}
+{"guess": "henry 8", "answers": ["henry viii"], "expected": true, "note": "digit 8 vs Roman viii in name"}
+{"guess": "color", "answers": ["colour"], "expected": true, "note": "UK/US: colour→color"}
+{"guess": "colour", "answers": ["color"], "expected": true, "note": "UK/US reverse: color→colour"}
+{"guess": "theater", "answers": ["theatre"], "expected": true, "note": "UK/US: theatre→theater"}
+{"guess": "defense", "answers": ["defence"], "expected": true, "note": "UK/US: defence→defense"}
+{"guess": "offense", "answers": ["offence"], "expected": true, "note": "UK/US: offence→offense"}
+{"guess": "center", "answers": ["centre"], "expected": true, "note": "UK/US: centre→center"}
+{"guess": "gray", "answers": ["grey"], "expected": true, "note": "UK/US: grey→gray"}
+{"guess": "grey", "answers": ["gray"], "expected": true, "note": "UK/US: gray→grey"}
+{"guess": "airplane", "answers": ["aeroplane"], "expected": true, "note": "UK/US: aeroplane→airplane"}
+{"guess": "organize", "answers": ["organise"], "expected": true, "note": "UK/US: organise→organize"}
+{"guess": "honor", "answers": ["honour"], "expected": true, "note": "UK/US: honour→honor"}
+{"guess": "math", "answers": ["maths"], "expected": true, "note": "UK/US: maths→math"}
+{"guess": "plate", "answers": ["plates"], "expected": true, "note": "plural fold: singular guess vs plural answer"}
+{"guess": "plates", "answers": ["plate"], "expected": true, "note": "plural fold: plural guess vs singular answer"}
+{"guess": "trolley", "answers": ["trolleys"], "expected": true, "note": "plural fold: singular vs stored plural"}
+{"guess": "trolleys", "answers": ["trolleys"], "expected": true, "note": "plural exact stored"}
+{"guess": "mattress", "answers": ["mattresses"], "expected": true, "note": "plural fold -es: singular vs plural"}
+{"guess": "mattresses", "answers": ["mattresses"], "expected": true, "note": "plural exact -es stored"}
+{"guess": "alicia key", "answers": ["alicia keys"], "expected": true, "note": "plural fold in two-word name"}
+{"guess": "polar bear", "answers": ["polar bears"], "expected": true, "note": "plural fold animal name"}
+{"guess": "1867", "answers": ["1867"], "expected": true, "note": "year exact - real data (Alaska purchase)"}
+{"guess": "1992", "answers": ["1992"], "expected": true, "note": "year exact - real data (27th Amendment)"}
+{"guess": "1685", "answers": ["1685"], "expected": true, "note": "year exact - real data (Handel/Bach/Scarlatti)"}
+{"guess": "1889", "answers": ["1889"], "expected": true, "note": "year exact - real data (Nintendo founded)"}
+{"guess": "13", "answers": ["13"], "expected": true, "note": "numeric exact - baker's dozen"}
+{"guess": "2000000000", "answers": ["2, 000, 000, 000"], "expected": true, "note": "big number with spaces in stored answer"}
+{"guess": "bolivia and paraguay", "answers": ["bolivia and paraguay"], "expected": true, "note": "two-country phrase exact - real data"}
+{"guess": "paraguay and bolivia", "answers": ["bolivia and paraguay"], "expected": true, "note": "word order swap - real data geography"}
+{"guess": "bolivia paraguay", "answers": ["bolivia and paraguay"], "expected": true, "note": "missing stop word 'and' - real data"}
+{"guess": "voting rights for women", "answers": ["voting rights for women"], "expected": true, "note": "long phrase exact - real data (19th amendment)"}
+{"guess": "womens voting rights", "answers": ["voting rights for women"], "expected": true, "note": "word order swap long phrase - real data"}
+{"guess": "voting rights women", "answers": ["voting rights for women"], "expected": true, "note": "all keywords correct, stop word dropped - real data"}
+{"guess": "outstanding heroism guadalcanal world war ii", "answers": ["outstanding heroism at guadalcanal during world war ii"], "expected": true, "note": "long answer word order, stop words dropped - real data"}
+{"guess": "somebody picked up a nickel", "answers": ["somebody picked up a nickel"], "expected": true, "note": "quirky long phrase exact - real data"}
+{"guess": "it was the first to say in god we trust", "answers": ["it was the first to say in god we trust"], "expected": true, "note": "very long phrase exact - real data"}
+{"guess": "first person shooter", "answers": ["first person shooter"], "expected": true, "note": "long phrase exact - real data (FPS)"}
+{"guess": "paris aided by apollo", "answers": ["paris aided by apollo"], "expected": true, "note": "mythology phrase exact - real data"}
+{"guess": "a martial art championship", "answers": ["a martial art championship"], "expected": true, "note": "long phrase exact - real data"}
+{"guess": "martial art championship", "answers": ["a martial art championship"], "expected": true, "note": "phrase without leading article - real data"}
+{"guess": "the new york philharmonic", "answers": ["the new york philharmonic"], "expected": true, "note": "orchestra full name exact - real data"}
+{"guess": "new york philharmonic", "answers": ["the new york philharmonic"], "expected": true, "note": "orchestra name without 'the' - real data"}
+{"guess": "salt and pepper", "answers": ["salt and pepper"], "expected": true, "note": "condiment phrase exact - real data"}
+{"guess": "pepper and salt", "answers": ["salt and pepper"], "expected": true, "note": "condiment phrase reversed - real data"}
+{"guess": "potato and cabbage", "answers": ["potato and cabbage"], "expected": true, "note": "food phrase exact - real data (Bubble & Squeak)"}
+{"guess": "cabbage and potato", "answers": ["potato and cabbage"], "expected": true, "note": "food phrase reversed - real data"}
+{"guess": "salt pepper", "answers": ["salt and pepper"], "expected": true, "note": "condiment without and - real data"}
+{"guess": "candy bar", "answers": ["a candy bar"], "expected": true, "note": "phrase without leading article - real data (first microwaved food)"}
+{"guess": "a candy bar", "answers": ["a candy bar"], "expected": true, "note": "phrase with article exact - real data"}
+{"guess": "dark chocolate", "answers": ["dark chocolate"], "expected": true, "note": "two-word exact - real data"}
+{"guess": "pez candy", "answers": ["pez candy"], "expected": true, "note": "product exact - real data"}
+{"guess": "allegro con brio", "answers": ["allegro con brio"], "expected": true, "note": "music phrase exact - real data (Beethoven 5th)"}
+{"guess": "breast cancer", "answers": ["breast cancer"], "expected": true, "note": "medical two-word exact - real data"}
+{"guess": "proxima centauri", "answers": ["proxima centauri"], "expected": true, "note": "star name exact - real data"}
+{"guess": "captain america", "answers": ["captain america"], "expected": true, "note": "superhero exact - real data"}
+{"guess": "hand divination", "answers": ["hand divination"], "expected": true, "note": "phrase exact - real data (cheiromancy)"}
+{"guess": "i love you", "answers": ["i love you"], "expected": true, "note": "phrase exact with stop words - real data"}
+{"guess": "aphrodite", "answers": ["aphrodite"], "expected": true, "note": "Greek goddess name exact - real data"}
+{"guess": "cerberus", "answers": ["cerberus"], "expected": true, "note": "Greek monster name exact - real data"}
+{"guess": "elysium", "answers": ["elysium"], "expected": true, "note": "Greek mythology place exact - real data"}
+{"guess": "plato", "answers": ["plato"], "expected": true, "note": "Greek philosopher name exact - real data"}
+{"guess": "heracles", "answers": ["heracles"], "expected": true, "note": "Greek hero name exact - real data"}
+{"guess": "digestion", "answers": ["digestion"], "expected": true, "note": "single word exact - real data (dyspepsia)"}
+{"guess": "honey", "answers": ["honey"], "expected": true, "note": "food exact - real data (never spoils)"}
+{"guess": "coffee", "answers": ["coffee"], "expected": true, "note": "food exact - real data"}
+{"guess": "october", "answers": ["october"], "expected": true, "note": "month exact - real data"}
+{"guess": "india", "answers": ["india"], "expected": true, "note": "country exact - real data (A.R. Rahman)"}
+{"guess": "venus", "answers": ["venus"], "expected": true, "note": "planet exact - real data (Aphrodite/Ishtar Terra)"}
+{"guess": "atari", "answers": ["atari"], "expected": true, "note": "brand exact - real data"}
+{"guess": "chopin", "answers": ["chopin"], "expected": true, "note": "composer exact - real data"}
+{"guess": "tuba", "answers": ["tuba"], "expected": true, "note": "instrument exact - real data"}
+{"guess": "dolphin", "answers": ["dolphin"], "expected": true, "note": "animal exact - real data"}
+{"guess": "giraffe", "answers": ["giraffe"], "expected": true, "note": "animal exact - real data"}
+{"guess": "fennec", "answers": ["fennec"], "expected": true, "note": "animal exact - real data (fennec fox)"}
+{"guess": "paris", "answers": ["paris"], "expected": true, "note": "city exact - real data (Statue of Liberty)"}
+{"guess": "babe ruth", "answers": ["babe ruth"], "expected": true, "note": "player name exact - real data"}
+{"guess": "lou gehrig", "answers": ["lou gehrig"], "expected": true, "note": "player name exact - real data"}
+{"guess": "bugs bunny", "answers": ["bugs bunny"], "expected": true, "note": "cartoon name exact - real data"}
+{"guess": "tim burton", "answers": ["tim burton"], "expected": true, "note": "director name exact - real data"}
+{"guess": "alicia keys", "answers": ["alicia keys"], "expected": true, "note": "musician name exact - real data"}
+{"guess": "miley cyrus", "answers": ["miley cyrus"], "expected": true, "note": "celebrity exact - real data"}
+{"guess": "buzz aldrin", "answers": ["buzz aldrin"], "expected": true, "note": "astronaut exact - real data"}
+{"guess": "rudolph abel", "answers": ["rudolph abel"], "expected": true, "note": "spy name exact - real data"}
+{"guess": "red wolf", "answers": ["red wolf"], "expected": true, "note": "animal two-word exact - real data"}
+{"guess": "welsh corgi", "answers": ["welsh corgi"], "expected": true, "note": "breed exact - real data"}
+{"guess": "theodore roosevelt", "answers": ["theodore roosevelt"], "expected": true, "note": "president name exact - real data"}
+{"guess": "no", "answers": ["no"], "expected": true, "note": "single word no exact"}
+{"guess": "7.2 million", "answers": ["$7.2 million"], "expected": true, "note": "dollar amount without sign - real data (Alaska price)"}
+{"guess": "theodore roosvelt", "answers": ["theodore roosevelt"], "expected": true, "note": "typo president name MID fuzzy - real data"}
+{"guess": "captain amarica", "answers": ["captain america"], "expected": true, "note": "typo superhero LONG fuzzy"}
+{"guess": "dark choclate", "answers": ["dark chocolate"], "expected": true, "note": "typo food LONG fuzzy"}
+{"guess": "buzz aldrn", "answers": ["buzz aldrin"], "expected": true, "note": "typo astronaut MID fuzzy - real data"}
+{"guess": "typo astronaut", "answers": ["buzz aldrn"], "expected": false, "note": "wrong guess — description in guess slot is trap"}
+{"guess": "miley cirus", "answers": ["miley cyrus"], "expected": true, "note": "typo celebrity MID fuzzy - real data"}
+{"guess": "bugs banny", "answers": ["bugs bunny"], "expected": true, "note": "typo cartoon MID fuzzy - real data"}
+{"guess": "cerberos", "answers": ["cerberus"], "expected": true, "note": "typo Greek monster MID fuzzy - real data"}
+{"guess": "sokrates", "answers": ["socrates"], "expected": true, "note": "typo philosopher MID fuzzy"}
+{"guess": "proxima centary", "answers": ["proxima centauri"], "expected": true, "note": "typo star name LONG fuzzy - real data"}
+{"guess": "hercules", "answers": ["heracles"], "expected": true, "note": "alt spelling Greek hero MID fuzzy - real data"}
+{"guess": "welsh korgi", "answers": ["welsh corgi"], "expected": true, "note": "typo breed MID fuzzy - real data"}
+{"guess": "cat", "answers": ["bat"], "expected": false, "note": "TRAP: near-miss short word, 1 char diff"}
+{"guess": "6", "answers": ["16"], "expected": false, "note": "TRAP: partial digit - '6' must not match '16'"}
+{"guess": "16", "answers": ["6"], "expected": false, "note": "TRAP: reverse partial digit - '16' must not match '6'"}
+{"guess": "venus", "answers": ["mars"], "expected": false, "note": "TRAP: wrong planet"}
+{"guess": "mars", "answers": ["venus"], "expected": false, "note": "TRAP: wrong planet reversed"}
+{"guess": "yes", "answers": ["no"], "expected": false, "note": "TRAP: yes vs no"}
+{"guess": "no", "answers": ["yes"], "expected": false, "note": "TRAP: no vs yes"}
+{"guess": "13", "answers": ["12"], "expected": false, "note": "TRAP: nearby number (12 vs 13)"}
+{"guess": "1991", "answers": ["1992"], "expected": false, "note": "TRAP: year off by one"}
+{"guess": "1685", "answers": ["1686"], "expected": false, "note": "TRAP: year off by one (music)"}
+{"guess": "london", "answers": ["paris"], "expected": false, "note": "TRAP: wrong city"}
+{"guess": "november", "answers": ["october"], "expected": false, "note": "TRAP: wrong month"}
+{"guess": "flute", "answers": ["tuba"], "expected": false, "note": "TRAP: wrong instrument"}
+{"guess": "beethoven", "answers": ["chopin"], "expected": false, "note": "TRAP: wrong composer"}
+{"guess": "brahms", "answers": ["claude debussy"], "expected": false, "note": "TRAP: wrong composer last name"}
+{"guess": "aristotle", "answers": ["plato"], "expected": false, "note": "TRAP: wrong philosopher"}
+{"guess": "hydra", "answers": ["cerberus"], "expected": false, "note": "TRAP: wrong Greek monster"}
+{"guess": "neil armstrong", "answers": ["buzz aldrin"], "expected": false, "note": "TRAP: wrong astronaut name"}
+{"guess": "lou gehrig", "answers": ["babe ruth"], "expected": false, "note": "TRAP: wrong player name"}
+{"guess": "nintendo", "answers": ["atari"], "expected": false, "note": "TRAP: wrong brand"}
+{"guess": "fox", "answers": ["fennec"], "expected": false, "note": "TRAP: wrong short animal name"}
+{"guess": "sloth", "answers": ["dolphin"], "expected": false, "note": "TRAP: wrong animal"}
+{"guess": "wolf", "answers": ["red wolf"], "expected": false, "note": "TRAP: partial two-word animal answer"}
+{"guess": "corgi", "answers": ["welsh corgi"], "expected": false, "note": "TRAP: partial breed name"}
+{"guess": "cancer", "answers": ["breast cancer"], "expected": false, "note": "TRAP: partial medical two-word answer"}
+{"guess": "chocolate", "answers": ["dark chocolate"], "expected": false, "note": "TRAP: partial food two-word answer"}
+{"guess": "candy", "answers": ["pez candy"], "expected": false, "note": "TRAP: partial product two-word answer"}
+{"guess": "voting rights", "answers": ["voting rights for women"], "expected": false, "note": "TRAP: partial phrase - missing key qualifier 'for women' - real data"}
+{"guess": "candy bar", "answers": ["pez candy"], "expected": false, "note": "TRAP: wrong product two-word answer"}
+{"guess": "in god we trust", "answers": ["it was the first to say in god we trust"], "expected": false, "note": "TRAP: partial long phrase - phrase is substring but not the answer"}
+{"guess": "9", "answers": ["no"], "expected": false, "note": "TRAP: number vs word"}
+{"guess": "fps", "answers": ["first person shooter"], "expected": false, "note": "TRAP: abbreviation vs full phrase"}
+{"guess": "debussy", "answers": ["claude debussy"], "expected": false, "note": "TRAP: last name only vs full name - real data"}
+{"guess": "paris apollo", "answers": ["paris aided by apollo"], "expected": false, "note": "TRAP: partial mythology phrase - real data"}
+{"guess": "omaha", "answers": ["omaha, ne"], "expected": false, "note": "TRAP: city only vs city+state - real data"}
+{"guess": "somebody found a coin", "answers": ["somebody picked up a nickel"], "expected": false, "note": "TRAP: plausible wrong long answer - real data"}
+{"guess": "zeus", "answers": ["paris aided by apollo"], "expected": false, "note": "TRAP: wrong myth name in long phrase - real data"}
+{"guess": "cookie", "answers": ["a candy bar"], "expected": false, "note": "TRAP: wrong snack - real data"}
+{"guess": "coffee", "answers": ["dark chocolate"], "expected": false, "note": "TRAP: wrong food item - real data"}
+{"guess": "october", "answers": ["november"], "expected": false, "note": "TRAP: wrong month reversed"}
+{"guess": "buzz aldrin", "answers": ["neil armstrong"], "expected": false, "note": "TRAP: wrong astronaut reversed"}
+{"guess": "oklahoma", "answers": ["october"], "expected": false, "note": "TRAP: word similarity but wrong category"}
+{"guess": "matt", "answers": ["maths"], "expected": false, "note": "TRAP: very short near-miss short word"}
+{"guess": "6", "answers": ["6"], "expected": true, "note": "numeric exact single digit"}
+{"guess": "three", "answers": ["3"], "expected": true, "note": "number word three→3 vs stored digit"}
+{"guess": "five", "answers": ["5"], "expected": true, "note": "number word five→5 vs stored digit"}
+{"guess": "ten", "answers": ["10"], "expected": true, "note": "number word ten→10 vs stored digit"}
+{"guess": "twenty", "answers": ["20"], "expected": true, "note": "number word twenty→20 vs stored digit"}
+{"guess": "dark chocolate", "answers": ["dark chocolate", "white chocolate"], "expected": true, "note": "multi-answer list - first answer matches"}
+{"guess": "white chocolate", "answers": ["dark chocolate", "white chocolate"], "expected": true, "note": "multi-answer list - second answer matches"}
+{"guess": "milk chocolate", "answers": ["dark chocolate", "white chocolate"], "expected": false, "note": "TRAP: multi-answer list - neither matches"}
+{"guess": "atari", "answers": ["pong", "atari"], "expected": true, "note": "multi-answer list - second answer exact"}
+{"guess": "buzz aldrin", "answers": ["buzz aldrin", "neil armstrong"], "expected": true, "note": "multi-answer list - first answer exact"}
+{"guess": "neil armstrong", "answers": ["buzz aldrin", "neil armstrong"], "expected": true, "note": "multi-answer list - second answer exact"}
+{"guess": "3 hours 23 minutes 8.4 seconds", "answers": ["3 hours 23 minutes 8.4 seconds"], "expected": true, "note": "complex time answer exact - real data (John Glenn flight)"}
+{"guess": "arete", "answers": ["arete"], "expected": true, "note": "Greek concept exact - real data"}
+{"guess": "damion", "answers": ["damion"], "expected": true, "note": "Greek proper name exact - real data"}
+{"guess": "hooloovoo", "answers": ["hooloovoo"], "expected": true, "note": "invented word exact - real data (Hitchhiker's Guide)"}
+{"guess": "leonov", "answers": ["leonov"], "expected": true, "note": "cosmonaut last name exact - real data"}
+{"guess": "shoeless", "answers": ["shoeless"], "expected": true, "note": "nickname exact - real data (baseball)"}
+{"guess": "einstein", "answers": ["einstein"], "expected": true, "note": "scientist last name exact"}
+{"guess": "albert einstein", "answers": ["einstein"], "expected": true, "note": "full name vs stored last name - pass 1 single-word"}
+{"guess": "miley", "answers": ["miley cyrus"], "expected": false, "note": "TRAP: first name only vs full celebrity name"}
+{"guess": "cyrus", "answers": ["miley cyrus"], "expected": false, "note": "TRAP: last name only vs full celebrity name - different direction"}
+{"guess": "luke skywalker", "answers": ["darth vader"], "expected": false, "note": "TRAP: wrong Star Wars character"}
+{"guess": "einstein", "answers": ["albert einstein"], "expected": false, "note": "TRAP: last name only vs stored full name - score too low"}
+{"guess": "9", "answers": ["no"], "expected": false, "note": "TRAP: digit vs word - numeric mismatch"}
+{"guess": "private corporal sergeant lieutenant major colonel general", "answers": ["private-corporal-sergeant-lieutenant-major-colonel-general"], "expected": false, "note": "KNOWN LIMITATION: hyphens join tokens into one super-token in normalize; space-separated guess cannot match - real data (Army ranks)"}
+{"guess": "jupiters moon io", "answers": ["jupiters moon io"], "expected": true, "note": "possessive phrase exact - real data (most volcanic)"}
+{"guess": "io", "answers": ["jupiters moon io"], "expected": false, "note": "TRAP: partial answer - just the moon name - real data"}
+{"guess": "proxima centauri", "answers": ["proxima centauri"], "expected": true, "note": "star exact dup check"}
+{"guess": "proxima", "answers": ["proxima centauri"], "expected": false, "note": "TRAP: first word only of two-word star name - real data"}
+{"guess": "plato", "answers": ["plato"], "expected": true, "note": "philosopher exact dup check - real data"}
+{"guess": "hand divination", "answers": ["hand divination"], "expected": true, "note": "phrase exact dup check - real data"}
+{"guess": "claude debussy", "answers": ["claude debussy"], "expected": true, "note": "composer full name exact - real data"}
+{"guess": "atari", "answers": ["atari"], "expected": true, "note": "brand exact dup check - real data"}
+{"guess": "timothy burton", "answers": ["tim burton"], "expected": false, "note": "TRAP: wrong first name same last name"}
+{"guess": "tim allen", "answers": ["tim burton"], "expected": false, "note": "TRAP: right first name wrong last name"}
+{"guess": "john young", "answers": ["john young"], "expected": true, "note": "astronaut name exact - real data"}
+{"guess": "john yung", "answers": ["john young"], "expected": true, "note": "typo astronaut MID fuzzy - real data"}
+{"guess": "john old", "answers": ["john young"], "expected": false, "note": "TRAP: partial name wrong - real data"}
+{"guess": "elysium", "answers": ["elysium"], "expected": true, "note": "Greek place exact dup check - real data"}
+{"guess": "tartarus", "answers": ["elysium"], "expected": false, "note": "TRAP: different Greek underworld region"}
+{"guess": "snail", "answers": ["snail"], "expected": true, "note": "animal exact - real data (not omnivorous)"}
+{"guess": "snail", "answers": ["sloth"], "expected": false, "note": "TRAP: similar-length wrong animal - real data"}
+{"guess": "january", "answers": ["october"], "expected": false, "note": "TRAP: different month same category"}
+{"guess": "dark choclate", "answers": ["dark chocolate"], "expected": true, "note": "typo food LONG fuzzy dup check"}
+{"guess": "first person shooting", "answers": ["first person shooter"], "expected": true, "note": "typo/variant phrase - real data (FPS)"}
+{"guess": "first place shooter", "answers": ["first person shooter"], "expected": false, "note": "TRAP: wrong word in phrase - real data"}
+{"guess": "allegro con fuoco", "answers": ["allegro con brio"], "expected": false, "note": "TRAP: similar Italian music phrase - real data"}
+{"guess": "new york yankees", "answers": ["the brooklyn dodgers"], "expected": false, "note": "TRAP: different baseball team - real data"}
+{"guess": "brooklyn dodgers", "answers": ["the brooklyn dodgers"], "expected": true, "note": "real data - team name without 'the'"}
+{"guess": "the dodgers", "answers": ["the brooklyn dodgers"], "expected": false, "note": "TRAP: incomplete team name missing 'brooklyn' - real data"}
+{"guess": "stanley frank musial", "answers": ["stanley frank musial"], "expected": true, "note": "full name exact - real data (baseball)"}
+{"guess": "stan musial", "answers": ["stanley frank musial"], "expected": false, "note": "TRAP: nickname version of full real-data name"}
+{"guess": "february", "answers": ["october"], "expected": false, "note": "TRAP: wrong month - real data"}
+{"guess": "september 7 1921", "answers": ["september 7, 1921"], "expected": true, "note": "date without comma - real data (Miss America)"}
+{"guess": "october 7 1921", "answers": ["september 7, 1921"], "expected": false, "note": "TRAP: wrong month in date - real data"}
+{"guess": "captain america", "answers": ["captain america"], "expected": true, "note": "superhero exact dup check - real data"}
+{"guess": "captain marvel", "answers": ["captain america"], "expected": false, "note": "TRAP: different captain superhero - real data"}
+{"guess": "spelling", "answers": ["defence"], "expected": false, "note": "TRAP: completely wrong short word"}
+{"guess": "theatre", "answers": ["theater"], "expected": true, "note": "UK/US theater reversed"}
+{"guess": "behaviour", "answers": ["behavior"], "expected": true, "note": "UK/US behavior"}
+{"guess": "neighbour", "answers": ["neighbor"], "expected": true, "note": "UK/US neighbor"}
+{"guess": "flavour", "answers": ["flavor"], "expected": true, "note": "UK/US flavor"}
+{"guess": "licence", "answers": ["license"], "expected": true, "note": "UK/US license"}
+{"guess": "recognised", "answers": ["recognized"], "expected": true, "note": "UK/US recognized"}
+{"guess": "organised", "answers": ["organized"], "expected": true, "note": "UK/US organized"}
+{"guess": "short answer that crashes test", "answers": [], "expected": false, "note": "edge: empty answers list should return false without crash"}
+{"guess": "", "answers": ["something"], "expected": false, "note": "edge: empty guess should return false without crash"}
+{"guess": "hi", "answers": ["hi"], "expected": true, "note": "edge: very short exact match - 2 chars"}
+{"guess": "ox", "answers": ["ox"], "expected": true, "note": "edge: 2-char word exact (trivia game oxo)"}
+{"guess": "oxo", "answers": ["oxo"], "expected": true, "note": "edge: 3-char word exact - real data (first graphical computer game)"}
+{"guess": "ox", "answers": ["oxo"], "expected": false, "note": "TRAP: 2-char vs 3-char near-miss"}
+{"guess": "snookie", "answers": ["nicole snookie polizzi"], "expected": false, "note": "TRAP: nickname only vs full celebrity name - real data"}
+{"guess": "three hours 23 minutes", "answers": ["3 hours 23 minutes 8.4 seconds"], "expected": false, "note": "TRAP: partial complex time answer - real data"}
+{"guess": "his abs", "answers": ["his abs"], "expected": true, "note": "short phrase exact - real data (The Situation)"}
+{"guess": "abs", "answers": ["his abs"], "expected": false, "note": "TRAP: partial phrase one word - real data"}
+{"guess": "the hot stove league", "answers": ["the hot stove league"], "expected": true, "note": "idiomatic phrase exact - real data (baseball)"}
+{"guess": "hot stove league", "answers": ["the hot stove league"], "expected": true, "note": "phrase without article - real data"}
+{"guess": "cold stove league", "answers": ["the hot stove league"], "expected": false, "note": "TRAP: wrong adjective in phrase - real data"}
+{"guess": "a movable laser cannon", "answers": ["a movable laser cannon"], "expected": true, "note": "phrase exact - real data (Space Invaders)"}
+{"guess": "laser cannon", "answers": ["a movable laser cannon"], "expected": false, "note": "TRAP: partial phrase missing modifier - real data"}
+{"guess": "packing a suitcase", "answers": ["packing a suitcase"], "expected": true, "note": "phrase exact - real data (Miss America talent)"}
+{"guess": "suitcase", "answers": ["packing a suitcase"], "expected": false, "note": "TRAP: single word from phrase - real data"}
+{"guess": "tim burten", "answers": ["tim burton"], "expected": true, "note": "typo director MID fuzzy - real data"}
+{"guess": "alicia ceys", "answers": ["alicia keys"], "expected": true, "note": "typo musician MID fuzzy - real data"}
+{"guess": "alicia west", "answers": ["alicia keys"], "expected": false, "note": "TRAP: wrong last name musician - real data"}
+{"guess": "red wol", "answers": ["red wolf"], "expected": true, "note": "typo animal MID fuzzy - real data"}
+{"guess": "blue wolf", "answers": ["red wolf"], "expected": false, "note": "TRAP: wrong color in animal name - real data"}
+{"guess": "proxima cantauri", "answers": ["proxima centauri"], "expected": true, "note": "typo star name LONG fuzzy - real data"}
+{"guess": "star wars", "answers": ["proxima centauri"], "expected": false, "note": "TRAP: completely different two-word space answer"}
+{"guess": "buzz aldrin", "answers": ["edwin buzz aldrin"], "expected": false, "note": "KNOWN LIMITATION: partial 2-of-3-word name, score ~0.78 below LONG threshold - matcher does not support partial name matching - real data"}
+{"guess": "edwin aldrin", "answers": ["edwin buzz aldrin"], "expected": false, "note": "KNOWN LIMITATION: 2-of-3 name parts at score ~0.85; with LONG=0.86 threshold this falls below - real data"}
+{"guess": "neil aldrin", "answers": ["edwin buzz aldrin"], "expected": false, "note": "TRAP: wrong first name same last - real data"}
+{"guess": "the brooklyn dodgers", "answers": ["the brooklyn dodgers"], "expected": true, "note": "team full name exact - real data"}
+{"guess": "babe ruthless", "answers": ["babe ruth"], "expected": false, "note": "GUARDED TRAP: word-boundary bug fixed — token-seq check replaces raw string-substring; ['babe','ruth'] is not a contiguous run of ['babe','ruthless'] so this correctly returns false now - real data"}
