@@ -4,6 +4,7 @@ import random
 import DataStorage
 
 TESTIMONY_CHANNEL_ID = 1490167539110510856
+TESTIMONY_ROLE_NAME = "testimony"
 
 last_random_verse = [] # contains a single verse format: version, book, chapter, verse
 
@@ -348,3 +349,20 @@ async def search_verses(ctx, max_results: int, query: str):
         embed.add_field(name=reference, value=f'"{display_text}"', inline=False)
 
     await ctx.send(embed=embed)
+
+
+async def testimony_role(ctx):
+    """Gives the user the testimony role."""
+    role = discord.utils.find(lambda r: r.name.lower() == TESTIMONY_ROLE_NAME.lower(), ctx.guild.roles)
+    if role is None:
+        await ctx.send(f"❌ Could not find a role named **{TESTIMONY_ROLE_NAME}** on this server.")
+        return
+
+    if role in ctx.author.roles:
+        await ctx.send(f"ℹ️ You already have the **{role.name}** role!")
+        return
+
+    await ctx.author.add_roles(role)
+    await ctx.send(f"✅ You have been given the **{role.name}** role!")
+
+

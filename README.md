@@ -38,6 +38,7 @@ CafeBot is a multi-purpose, modular Discord bot built with Python and `discord.p
 - **Random Bible verse lookup** across multiple translations (`.random_verse <version>`).
 - **Verse context view** showing surrounding passages (`.verse_context`).
 - **Anonymous testimony submission** via DM with confirmation, relayed to a designated channel (`.send_testimony`).
+- **Testimony role assignment** allowing users to claim the testimony role (`.testimony_role`).
 
 ### Tabletop RPG (D&D)
 - **Dice rolling** for standard D&D types (d4 – d100) with modifiers (`.roll_dice`, `.roll_multiple`).
@@ -135,7 +136,7 @@ CafeBot/
 ├── EconomyModule.py      # Economy: shifts, daily, tips, bank, lottery, rob, slots, blackjack
 ├── TriviaModule.py       # Trivia sessions, category config, normalized answer matching
 ├── MusicModule.py        # YouTube/SoundCloud playback, queue, loop, pause
-├── FaithModule.py        # Bible verse lookup, verse context, anonymous testimony
+├── FaithModule.py        # Bible verse lookup, verse context, anonymous testimony, testimony role
 ├── DndModule.py          # D&D dice and character commands
 ├── FunModule.py          # Duels, quotes, marriage, adoption, GIFs, 8-ball, profile
 ├── ModerationModule.py   # Purge, lockdown, slowmode, kick/ban/unban

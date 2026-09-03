@@ -171,6 +171,17 @@ def normalize_answer(answer: str) -> str:
     return normalize(answer)
 
 
+def normalize_answer_tokens(answer: str) -> list:
+    """
+    Token list for a stored answer, reusing the cached normalize_answer result.
+    normalize() is idempotent, so splitting the cached string is equivalent to
+    re-running the pipeline via _normalize_tokens — but it keeps the lru_cache
+    benefit instead of re-normalizing an already-normalized string on every call.
+    """
+    na = normalize_answer(answer)
+    return na.split() if na else []
+
+
 # ---------------------------------------------------------------------------
 # Plural fold helper (pairwise guard — never blind-stem)
 # ---------------------------------------------------------------------------
@@ -350,7 +361,7 @@ def extract_features(guess: str, answer) -> dict:
         best_ans   = answer[0] if answer else ""
         best_score = -1.0
         for a in answer:
-            atoks = _normalize_tokens(normalize_answer(a))
+            atoks = normalize_answer_tokens(a)
             _, sc, _ = _score(guess_tokens, atoks)
             if sc > best_score:
                 best_score = sc
@@ -438,7 +449,7 @@ def score_best(guess: str, acceptable_answers: list):
     best_pass    = "none"
 
     for answer in acceptable_answers:
-        answer_tokens = _normalize_tokens(normalize_answer(answer))
+        answer_tokens = normalize_answer_tokens(answer)
         passed, score, pass_name = _score(guess_tokens, answer_tokens)
         # Prefer passing answers; among equal-pass-status, take highest score.
         if (passed and not best_passed) or (passed == best_passed and score > best_score):
@@ -555,7 +566,7 @@ def verdict(guess: str, acceptable_answers: list) -> dict:
     # Re-run _score on the winning answer to get the pass verdict and pass_name.
     # This is a single O(1) call rather than re-iterating over all answers.
     guess_tokens  = _normalize_tokens(guess)
-    answer_tokens = _normalize_tokens(normalize_answer(best_answer))
+    answer_tokens = normalize_answer_tokens(best_answer)
     hard_correct, _, pass_name = _score(guess_tokens, answer_tokens)
 
     # in_gray_band is always computed from the raw score, independent of source.

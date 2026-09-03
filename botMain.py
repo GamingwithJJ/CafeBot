@@ -420,6 +420,7 @@ COMMAND_MODULES = {
         "description": "Send testimonies, get Bible verses, and more! (WIP)",
         "emoji": "✝️",
         "commands": [
+            ("`.testimony_role`", "Claim the testimony role", "any"),
             ("`.send_anonymous_testimony <message>`", "Send a testimony to the server's testimony channel with no name attached. **Must be used in DMs with the bot.** The bot will show you a preview and ask you to confirm before sending", "any"),
             ("`.random_verse [version]`", "Display a random Bible verse. Optionally specify a version (e.g. `ASV`) to pull from that translation only", "any"),
             ("`.verse_context`", "Show the 2 verses before and after the last randomly generated verse (if they exist)", "any"),
@@ -1163,6 +1164,12 @@ async def bank_upgrade(ctx):
 @is_authorized("any", guild_only=True)
 async def rob(ctx, target: FlexibleMember):
     await EconomyModule.rob(ctx, target)
+
+
+@bot.command(aliases=["testimony", "claim_testimony"])
+@is_authorized("any", guild_only=True)
+async def testimony_role(ctx):
+    await FaithModule.testimony_role(ctx)
 
 
 @bot.command()
@@ -2307,6 +2314,13 @@ async def slash_rob(interaction: discord.Interaction, target: discord.Member):
 
 
 # --- Faith ---
+
+@bot.tree.command(name="testimony_role", description="Claim the testimony role")
+async def slash_testimony_role(interaction: discord.Interaction):
+    if not await slash_auth_check(interaction, "any", guild_only=True): return
+    ctx = InteractionContext(interaction)
+    await FaithModule.testimony_role(ctx)
+
 
 @bot.tree.command(name="send_anonymous_testimony", description="Send a testimony anonymously (use in DMs with the bot)")
 async def slash_send_anonymous_testimony(interaction: discord.Interaction, message: str):
